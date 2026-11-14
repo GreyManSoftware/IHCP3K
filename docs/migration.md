@@ -1,4 +1,26 @@
-# Legacy mailbox import
+# Migration and offline restore
+
+## v0.5 local candidate from an offline backup
+
+This is an explicit offline operation, separate from normal installation and live cutover. The candidate is not published or live. Existing live/native-configuration policy blocks still apply. Do not start an older HTTP owner alongside new stdio writers or let two databases accept normal traffic as the same authority.
+
+1. Agree a single migration owner and barrier; stop every source writer/consumer, including old HTTP and any stdio connections. Record the source version and consistent backup identity privately.
+2. Obtain a verified SQLite snapshot/backup including committed WAL data and its SHA-256. Copying only a running `.db` file is not a consistent backup. Preserve the source and evidence unchanged.
+3. Ask for a new private destination and the working folder used by throwaway nudges. Restore with the explicit backup arguments:
+
+```sh
+node scripts/install-local.mjs /absolute/private/new-ihcp /absolute/private/offline-backup.db <sha256> --workdir /absolute/chosen/working-folder
+```
+
+The backup path is absolute and `<sha256>` is the verified 64-character lowercase digest, not literal placeholder text. The destination must be new; ordinary installer reuse cannot import into an existing runtime. The source backup must already be a stable standalone snapshot.
+
+The installer verifies the hash and database integrity, restores into the new private root and assigns fresh service identity/administrator credentials. Registered credentials are revoked, endpoints disabled with new revisions, enrolments cleared, and unfinished mail fenced into reconciliation with restore pauses. Existing worker execution/cleanup uncertainty remains for review. No source writes, live route switch, native configuration edits, worker continuation or unpause occur. Notification/worker configuration starts empty.
+
+After inspecting counts, hashes, claims, reply links and effects, explicitly relink endpoints and review native bindings. Preserve source/current state for comparison. Only an authorized separate cutover may choose the new authority and clear the relevant restore pauses; do not clear unrelated pauses. Newer messages/effects must be reconciled before rollback or activation. Never infer that restore success means those steps occurred.
+
+The local installer consumes a backup; it is not a backup-creation command. The older `ops.mjs backup/restore` commands below apply only to Docker/HTTP manifests. Do not point them at a stdio manifest.
+
+## Historical schema-0 mailbox import — Docker/HTTP
 
 The importer is an explicit, offline transition from the earlier schema-0 mailbox. The database remains the only live authority after cutover. It never watches a directory or continuously mirrors files.
 

@@ -9,10 +9,11 @@ export class ServiceError extends Error {
 const requireThat = (value, code) => { if (!value) throw new ServiceError(code); };
 
 export class Store extends EventEmitter {
-  constructor(filename, {recipients, now = Date.now, maxPending = 10000, wakeGapMs = 30000} = {}) {
+  constructor(filename, {recipients, now = Date.now, maxPending = 10000, wakeGapMs = 30000, shared = false} = {}) {
     super();
     this.setMaxListeners(100);
     this.now = now;
+    this.shared=shared;
     this.recipients = new Set(recipients);
     this.maxPending = maxPending;
     this.wakeGapMs = wakeGapMs;
@@ -24,19 +25,21 @@ export class Store extends EventEmitter {
     this.receiving = new Set();
     // A separate rollback-journal lock DB holds an OS-backed exclusive writer lock
     // for this process lifetime. SQLite releases it even after an abrupt crash.
-    if (filename !== ':memory:') {
+    if (filename !== ':memory:' && !shared) {
       this.owner = new DatabaseSync(filename+'.owner');
       try { this.owner.exec('PRAGMA busy_timeout=0; CREATE TABLE IF NOT EXISTS owner_guard (id INTEGER PRIMARY KEY); BEGIN EXCLUSIVE;'); }
       catch { this.owner.close(); throw new ServiceError('SERVICE_ALREADY_RUNNING'); }
     }
     try {
     this.db = new DatabaseSync(filename);
+    this.db.exec('PRAGMA busy_timeout=5000;');
+    if(shared)this.db.function('ihcp_writer_version',()=>5);
     const version = this.db.prepare('select sqlite_version() as v').get().v;
     const [major, minor, patch] = version.split('.').map(Number);
     requireThat(major > 3 || (major === 3 && (minor > 51 || minor === 51 && patch >= 3)), 'SQLITE_VERSION_UNSUPPORTED');
-    this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=2000;');
+    this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
     const schema = this.db.prepare('PRAGMA user_version').get().user_version;
-    requireThat(schema >= 0 && schema <= 4, 'SCHEMA_VERSION_UNSUPPORTED');
+    requireThat(schema >= 0 && schema <= (shared?5:4), 'SCHEMA_VERSION_UNSUPPORTED');
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY, sender TEXT NOT NULL, recipient TEXT NOT NULL,
@@ -66,6 +69,7 @@ export class Store extends EventEmitter {
       );
     `);
     if (schema < 2) this.transaction(() => {
+      if(this.db.prepare('PRAGMA user_version').get().user_version>=2)return;
       this.db.exec('ALTER TABLE outbox ADD COLUMN notification_attempts INTEGER NOT NULL DEFAULT 0; ALTER TABLE outbox ADD COLUMN last_notified INTEGER; PRAGMA user_version=2;');
     });
     this.db.exec(`CREATE TABLE IF NOT EXISTS wake_dispatch (
@@ -73,19 +77,29 @@ export class Store extends EventEmitter {
       state TEXT NOT NULL CHECK(state IN ('idle','reserved','queued','uncertain')),
       token_hash TEXT, deadline INTEGER, updated_at INTEGER NOT NULL, detail TEXT
     );`);
-    if(schema<3)this.db.exec('PRAGMA user_version=3;');
-    this.db.exec("UPDATE wake_dispatch SET state='uncertain',deadline=NULL WHERE state='reserved';");
+    this.transaction(()=>{if(this.db.prepare('PRAGMA user_version').get().user_version<3)this.db.exec('PRAGMA user_version=3;');});
+    if(!shared)this.db.exec("UPDATE wake_dispatch SET state='uncertain',deadline=NULL WHERE state='reserved';");
     // After service restart, a former handler might still have performed an external effect.
-    this.db.exec("UPDATE messages SET state='reconcile' WHERE state='claimed'; UPDATE outbox SET state='reconcile' WHERE state='claimed';");
+    if(!shared)this.db.exec("UPDATE messages SET state='reconcile' WHERE state='claimed'; UPDATE outbox SET state='reconcile' WHERE state='claimed';");
     this.sqliteVersion = version;
     } catch(e) {
       this.db?.close(); this.owner?.close(); throw e;
     }
   }
   transaction(fn) {
-    this.db.exec('BEGIN IMMEDIATE');
-    try { const value = fn(); this.db.exec('COMMIT'); return value; }
-    catch (e) { this.db.exec('ROLLBACK'); throw e; }
+    const depth=this.transactionDepth??0,savepoint='nested_'+depth;
+    // SQLite performs bounded native busy retries. Never replay a callback:
+    // only lock acquisition can fail before any of its effects occur.
+    try{this.db.exec(depth?`SAVEPOINT ${savepoint}`:'BEGIN IMMEDIATE');}
+    catch(e){if([5,6].includes(e.errcode))throw new ServiceError('DATABASE_BUSY');throw e;}
+    this.transactionDepth=depth+1;
+    try {
+      const value=fn();
+      requireThat(!value?.then,'ASYNC_TRANSACTION_FORBIDDEN');
+      this.db.exec(depth?`RELEASE ${savepoint}`:'COMMIT');return value;
+    } catch(e) {
+      this.db.exec(depth?`ROLLBACK TO ${savepoint}; RELEASE ${savepoint}`:'ROLLBACK');throw e;
+    } finally {this.transactionDepth=depth;}
   }
   recipient(id) { requireThat(this.recipients.has(id), 'UNKNOWN_RECIPIENT'); }
   scope(principal, permission, recipient) {
@@ -371,5 +385,5 @@ export class Store extends EventEmitter {
       return {expired:expired.length,compacted};
     });
   }
-  close() { this.db.close(); if(this.owner){this.owner.exec('ROLLBACK');this.owner.close();} }
+  close() { if(this.closed)return;this.closed=true;this.db.close(); if(this.owner){this.owner.exec('ROLLBACK');this.owner.close();} }
 }

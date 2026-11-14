@@ -1,85 +1,78 @@
 # Architecture
 
-One local service owns the SQLite database and exposes scoped tools over standard MCP Streamable HTTP. Its Docker port is published only on the host's loopback address. Sessions connect with scoped credentials. Small harness-specific wake adapters turn "mail is pending" into a native notification for a receiver that is not actively waiting. Clients do not share the database file, and a notification never grants permission to act.
+**v0.5 candidate; local tests pass, not published or cut over live.** Native adapter behavior remains subject to installed-version validation. The default runtime is local MCP stdio using an existing Node runtime. Compatible runtime connections share one private SQLite database. The database is the coordination authority; process identity is not chat identity.
 
 ```mermaid
 flowchart LR
-  subgraph HA[Codex]
-    RA["Receiving session<br/>(e.g. PA inbox)"]
-    SA[Send-only sessions]
-    WA["Queue bridge<br/>(bound to one native thread)"]
+  A["Harness session A<br/>explicit endpoint credential"]
+  B["Harness session B<br/>explicit endpoint credential"]
+  subgraph Local["Existing Node runtime processes"]
+    R1["MCP stdio connection"]
+    R2["MCP stdio connection"]
+    N["Trusted notification adapters<br/>endpoint and revision binding"]
+    W["Worker manager<br/>configured adapter and endpoint allowlist"]
+    M["Maintenance while active<br/>no inference"]
   end
-  subgraph HB[Claude]
-    RB["Receiving session<br/>(e.g. PA inbox)"]
-    SB[Send-only sessions]
-    WB["Background waiter<br/>(owned by receiving session)"]
-  end
-  subgraph D["Docker service - host loopback port"]
-    S[IHCP3K MCP service]
-    DB[("SQLite mail + directory<br/>named volume")]
-    M["Maintenance timer<br/>(no inference)"]
-    S --- DB
-    M --- DB
-  end
-  SA -->|mail.send| S
-  SB -->|mail.send| S
-  RA <-->|"send / claim / complete<br/>attend / wait / unattend"| S
-  RB <-->|"send / claim / complete<br/>attend / wait / unattend"| S
-  WA <-->|"wake.wait / reserve / record"| S
-  WB <-->|wake.wait| S
-  WA -. "native queue doorbell" .-> RA
-  WB -. "task completion notification" .-> RB
+  DB[("Private SQLite WAL<br/>mail, directory, attendance,<br/>notifications, worker results")]
+  Child["Bounded native worker<br/>separate owned session"]
+  A <-->|"MCP tools"| R1
+  B <-->|"MCP tools"| R2
+  R1 <--> DB
+  R2 <--> DB
+  R1 --> N
+  N <--> DB
+  N -. "native doorbell" .-> B
+  R1 --> W
+  W --> Child
+  Child -->|result| W
+  W <--> DB
+  M <--> DB
 ```
 
-Harness-to-service edges are MCP calls with per-principal scopes; the internal lines show database access. Dashed edges are native harness notifications: best-effort hints, never message transport. Canonical skills, agent definitions and memory are files each harness reads directly. They are not stored in or synced by this service, so they are not in the diagram.
+The drawing shows logical components, not a guaranteed process count. Each stdio runtime has its own notification/worker managers and maintenance timers. Runtime clients may be shared or reused by a harness; credentials explicitly bind endpoints. Workers belong to the manager that launched them. Opening another connection does not adopt its children.
 
-## Participants
+## State and concurrency
 
-- **Receiving session:** owns one inbox. It may claim, complete, release and attend only that inbox. Operator-scoped enrolment creates receiving endpoints and separate session/wake credentials. The legacy static initializer creates one PA inbox per harness. A PA is an optional coordination role, not something the service needs.
-- **Send-only session:** can post to permitted inboxes, but cannot read, claim or suppress notifications.
-- **Wake adapter:** one per receiving inbox, holding a wake/status credential. It is configured by hand with the receiver's native thread or hosting session. It calls `wake.wait`, never claims, and never reads message bodies.
+The shared schema stores mail, scoped directory entries, hashed credentials, request/reply links, attendance leases, native notification reservations and worker results. WAL transactions serialize mutations. Claim generations/tokens, endpoint revisions and notification reservations fence stale operations. A short database lease coordinates general maintenance across runtime processes; worker cleanup reserves eligible rows transactionally.
 
-Any endpoint configured with a permitted credential can communicate. Version 0.4 adds a scoped SQLite directory and explicit registration through the shared skill. Registration stores attributed model/usage profiles and private native bindings; it does not create native chats or automatically start wake adapters. Routing remains future work.
+Compatible v0.5 processes may share the database. A writer-version fence rejects incompatible writes. The older Docker/HTTP store uses an exclusive owner lock; it must not run against the shared local authority. Installer reuse checks identity, schema and copied-bundle integrity. Installation does not authorize an upgrade or live migration.
 
-## Two ways to receive
+A committed message survives process shutdown. Expired claims and uncertain notification/worker outcomes require reconciliation; they do not silently replay. Opening another stdio connection must not invalidate a valid claim held elsewhere. A completed message clears its body but retains duplicate protection.
 
-1. **Active receiver.** When awaiting a reply, the session calls `mail.attend` *before* sending, then `mail.wait` (which claims directly), then `mail.unattend`. The client's `exchange` helper wraps those steps. Attendance lasts up to 120 seconds and never renews itself. While it holds, the service withholds wake hints and new doorbell reservations for that inbox, so the reply needs no doorbell.
-2. **Receiver not actively waiting.** The adapter's bounded `wake.wait` sees pending mail. The Codex bridge reserves a fenced notification (`wake.reserve`), queues a native doorbell and records `queued` or `uncertain` (`wake.record`). The Claude waiter instead exits, allowing its hosting harness to notify the session; the session must re-arm that waiter. Pending hints are throttled to one per 30 seconds per inbox, and Codex dispatches coalesce until claimed or reconciled. The receiver then claims through MCP. A busy native session may deliver its queued notification after the current turn.
+## Requests and receiving
 
-**Limits:**
+`mail.request` commits a request with the caller's explicit return endpoint, derived from its credential, and a stable request ID. `mail.reply` uses the request's fenced claim to commit one correlated reply and complete the request atomically. Claimed replies carry `in_reply_to`; `mail.request_status` reports message and reply state. A completed request record alone is not proof of a successful task: inspect the reply and actual outcome.
 
-- A doorbell that was already reserved or queued can't be recalled by a later attendance.
-- An uncertain dispatch waits for an administrator's `control.reset_wake`.
-- A wake adapter lives only as long as its host process. If it runs inside another session, it stops when that session closes.
-- Waking a closed or restarted app depends on the harness and isn't guaranteed.
+Receivers either check their inbox or register bounded attendance before waiting. Attendance is persisted with a deadline so other runtime processes suppress new doorbells for that inbox. It does not renew itself, and starting another connection does not drop it. Already queued notifications cannot be recalled. The legacy `exchange` helper still uses ordinary mail and can receive unrelated messages.
 
-## Delivery and ownership
+## Native notifications
 
-- **Committing a message:** the message and its notification state commit together. Sender-scoped idempotency keys reject conflicting payloads.
-- **Claims:** each claim carries a generation, an opaque token and a deadline, so completing or releasing a stale claim fails.
-- **Restarts and expiry:** interrupted or expired claimed work goes to reconciliation; pending mail stays pending. Uncertain work is never repeated automatically.
-- **Separate outcomes:** native enqueue, model receipt and completed work are three separate results.
-- **One writer:** an SQLite ownership lock prevents a second service from writing.
+`runtime.notifications` maps exact endpoints to trusted native configurations with `endpoint_revision`. An active runtime checks pending mail, reserves a durable notification and invokes the configured adapter. These checks do not call a model. The Claude notification adapter itself may use a bounded model worker; Codex uses its native queue directly. No PA relay is required.
 
-## Cleanup
+In stdio, `mail.send`, `mail.request` and `mail.reply` commit first, then await the configured bounded notification before returning (`timeout_ms` capped at 30000, with bounded shutdown). The response includes `native_notification` dispatch status, never proof of target receipt. A one-shot CLI therefore attempts its configured nudge before closing. Mail stays durable if notification fails; retry only with the original idempotency key. The active-runtime timer remains for pending recovery. Notifications are disabled until explicitly configured.
 
-- **Completion:** clears the message body atomically, keeping the outcome and the duplicate identity.
-- **Maintenance:** a bounded pass runs every minute. It reconciles expired claims and compacts outcome and audit detail older than 90 days.
-- **Dedup identities:** these stay, so an old resend never becomes new work.
-- **Pending and uncertain work:** pending mail awaits its receiver; uncertain work needs an administrator's resolution, with a reason and a generation check.
-- **Not secure erasure:** logical deletion doesn't scrub the underlying bytes. Backup and restore must account for retained data and for possible replay after a rollback.
+- Codex queue acknowledgement establishes queuing only. Warnings and ambiguous output are uncertain.
+- Claude Code `ListAgents`/`SendMessage` requires version-specific validation of the combined no-persist notification path and an unambiguous stable target. Its worker success does not prove target receipt.
+- Copilot's documentation-based AHP notification adapter is experimental; installed-host access and behavior remain untested and may need changes.
 
-## Not implemented yet
+Registration/profile data cannot authorize an executable. Refresh or relink changes the endpoint revision; the trusted notification binding must be reviewed and updated explicitly. An uncertain dispatch is inspected before administrator reset. Missing delivery leaves mail pending with a manual fallback; it never starts an implicit replacement session.
 
-- automatic native session enrolment and task routing;
-- a supported auto-start for wake adapters;
-- reply correlation for each request (attendance covers the whole inbox);
-- session mirrors and handover checkpoints;
-- automatic native model inventory and routing (registered catalogue discovery is implemented);
-- a resource scheduler (capacity-aware requests are a convention today, not a service feature).
+## Bounded workers
 
-## Installation and directory
+An explicit `worker.start` selects only a trusted `runtime.workers` entry whose `allow_endpoints` includes the caller. Native executables, models, cwd, permissions, persistence and limits are operator configuration, not prompt fields. Native worker sessions are separate from the requester and recipient.
 
-The idempotent installer verifies container/runtime identity, authenticated health and the database owner lock before reuse. A new installation builds from a digest-pinned base and stores the resulting image ID. The shared skill uses one-use operator enrolment, per-endpoint credential hashes and revision-fenced registration. Discovery is ACL-filtered; native bindings and credential values are not returned. Observations carry age/provenance and do not grant execution authority. See [onboarding](onboarding.md).
+SQLite owns job identity and bounded results; the launching runtime owns the child process. `worker.status` and `worker.wait` inspect the caller's job. `worker.ack` records that the result was received. The CLI `worker` helper keeps its connection open through bounded waits. Closing its stdio connection aborts its owned running jobs, whose outcomes may be uncertain. Durable records do not imply detached execution.
 
-Deregistration revokes credentials and hides the endpoint without deleting unresolved mail. Restore disables registered endpoints and revokes their credentials, requiring explicit relink. Expired enrolment codes and old directory audit details are removed in bounded maintenance passes. The 0.4 real-harness cutover remains incomplete; see [validation](validation.md).
+## Retention and shutdown
+
+Maintenance runs while a runtime is active. When every runtime is closed, there is no notification delivery or timed cleanup; later runtime activity can resume eligible maintenance. No daemon or OS scheduler is installed implicitly.
+
+Completed mail bodies are cleared; older outcome/audit detail is compacted and dedup identities remain. Pending and uncertain work is retained. Native history cleanup is separate: only configured persisted Codex workers support archive/delete in this candidate, after durable result acknowledgement and verified exit. Failed and uncertain jobs are not automatic cleanup candidates. Worker result records and backups have their own retention; native cleanup does not erase them.
+
+No-persist, process exit, archive and delete are different outcomes. Immediate-child exit is not proof of descendant or remote-job exit. Neither logical deletion nor native cleanup promises zero residue or remote erasure.
+
+## Optional HTTP and external knowledge
+
+The [Docker/HTTP deployment](http-v04.md) retains the existing v0.4 capabilities with an exclusive database owner and explicit wake bridges. It does not gain stdio-only request/worker tools automatically. It is an alternative authority, never a parallel live copy of the same mail.
+
+Canonical skills, agent definitions and project memory remain in user-chosen files outside protocol state. Native adapters reference those sources. IHCP3K does not sync them, replicate sessions, schedule shared CPU/GPU resources or route ordinary prompts. See [onboarding](onboarding.md), [native adapters](native-adapters.md) and [protocol](protocol.md).

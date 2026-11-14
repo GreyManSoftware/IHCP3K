@@ -1,8 +1,10 @@
 # MCP contract
 
-Endpoint: `/mcp`, Streamable HTTP with the official SDK. Transport sessions are stateless; application state is durable in SQLite. Every request requires `Authorization: Bearer <token>`. The synthetic fixture and private live configuration are separate deployment modes.
+**v0.5 candidate; validation pending.** Default transport: local MCP stdio using the official SDK, an existing Node runtime and one shared SQLite authority. A connection receives the private runtime and credential-file paths; credentials bind the endpoint explicitly. Process lifetime does not establish a chat identity.
 
-Tools are filtered by principal permissions and enforce recipient scope again at execution. Replies contain JSON text and `structuredContent`; domain errors use `isError` with a stable error code. HTTP authentication failures use 401; invalid Host/Origin uses 403.
+Optional Docker/HTTP remains **v0.4 compatibility mode**: `/mcp`, Streamable HTTP, `Authorization: Bearer <token>`, stateless transport sessions and one exclusive SQLite owner. It does not expose the correlated request or worker tools below. Never run the old HTTP owner and new stdio writers against the same live database. Synthetic fixture and private live configuration remain separate.
+
+Tools are filtered by principal permissions and enforce recipient scope again at execution. Replies contain JSON text and `structuredContent`; domain errors use `isError` with a stable error code. In HTTP compatibility mode, authentication failures use 401; invalid Host/Origin uses 403. Stdio authenticates from the supplied credential file. Tool availability is filtered by the selected store and principal; a server version string alone does not prove a tool is supported.
 
 | Tool | Arguments and behavior |
 | --- | --- |
@@ -25,9 +27,9 @@ Tools are filtered by principal permissions and enforce recipient scope again at
 
 The waiter receives no message bodies. A 30-second minimum gap throttles pending notifications per recipient; a `timeout` response can therefore have a positive pending count. Adapters must continue bounded waiting without spinning. Active waiters and recently seen waiters (60 seconds) are distinct availability states, neither a guarantee of native delivery.
 
-The runtime requires an explicit `INTEROP_MODE`. Synthetic mode accepts only synthetic configuration and test-prefixed recipients. Live mode requires `mode:live`, `synthetic:false`, unique generated tokens and explicit per-permission recipient scopes. A PA may send to peers while claiming only its own inbox. See `AGENT_SETUP.md` for configuration and trust limits.
+The HTTP runtime requires an explicit `INTEROP_MODE`; synthetic mode accepts only synthetic configuration and test-prefixed recipients. Stdio uses an explicitly selected private manifest and live service configuration. Live configuration requires `mode:live`, `synthetic:false`, unique generated tokens and explicit per-permission recipient scopes. A receiving endpoint may send to permitted peers while claiming only its own inbox. A PA is optional. See `AGENT_SETUP.md` for configuration and trust limits.
 
-A claim consumes its inbox's outstanding native notification and fences its old dispatch token. A native-dispatch reservation expires after 60 seconds; expiry or process restart makes it uncertain, not automatically retried. Native enqueue failures are conservatively uncertain. An administrator must inspect actual queue state before resetting it.
+A claim consumes its inbox's outstanding native notification and fences its old dispatch token. A native-dispatch reservation expires after 60 seconds; an expired reservation becomes uncertain, not automatically retried. The v0.4 exclusive service also marks reserved notifications uncertain on restart; a new shared stdio connection must not invalidate another connection's live reservation. Native enqueue failures are conservatively uncertain. An administrator must inspect actual queue state before resetting it.
 
 Use native permissions independently of this protocol. Peer text is not user authorization. Reconcile uncertain external effects before retrying them.
 
@@ -35,14 +37,14 @@ Use native permissions independently of this protocol. Peer text is not user aut
 
 Register attendance **before** sending a request. While that lease is valid, `wake.wait` withholds pending hints and `wake.reserve` refuses new dispatch reservations for the inbox. `mail.wait` receives and claims mail directly; complete those claims normally. Release attendance in a `finally` path. A timeout is not a reply, and messages may be unrelated to the request.
 
-Attendance is ephemeral, lasts at most 120 seconds, and does not renew itself. Expiry or explicit release restores normal wake behavior; a service restart drops attendance immediately. Existing notification throttling and unresolved wake reservations still apply. Sender-only and waiter credentials cannot suppress another session's notifications. An already-reserved or queued doorbell cannot be recalled; the response flags that case. This is bounded inbox-wide suppression, not per-request reply correlation.
+Attendance lasts at most 120 seconds and does not renew itself. In v0.5 it is persisted with a deadline across shared connections; expiry or explicit release restores normal wake behavior. The v0.4 HTTP service uses process-local attendance and drops it on restart. Existing notification throttling and unresolved wake reservations still apply. Sender-only and waiter credentials cannot suppress another session's notifications. An already-reserved or queued doorbell cannot be recalled; the response flags that case. Attendance is inbox-wide suppression. Request correlation is supplied separately by the v0.5 request tools below.
 
 The SDK client's local `exchange` helper wraps attend → send → bounded wait → unattend. It is not an additional server tool. It returns the send result and any claimed messages, never completes work automatically, and never retries a send under a new idempotency key.
 
 
-## Registered endpoints (0.4)
+## Registered endpoints (introduced in v0.4)
 
-The same SQLite owner stores the directory, hashed credentials, one-use enrolments and bounded audit history. `registry` is an offline operator permission. Dynamic session permissions are `send`, own-inbox `claim`/`status`, scoped `discover` and own-profile `profile`; a separate credential has only `wake` and own-inbox `status`.
+The same SQLite authority stores the directory, hashed credentials, one-use enrolments and bounded audit history. `registry` is an offline operator permission. Dynamic session permissions are `send`, own-inbox `claim`/`status`, scoped `discover` and own-profile `profile`; a separate credential has only `wake` and own-inbox `status`.
 
 | Tool | Arguments and result |
 | --- | --- |
@@ -57,4 +59,35 @@ Relink uses a fresh operator enrolment at the current revision. It revokes old c
 
 Profiles and model suitability descriptions are untrusted, attributed data. Catalogue availability does not prove a model can execute now. Usage records retain their source and observation time; a passed reset timestamp does not reset a value automatically. No AI polling or automatic model dispatch is installed. Native wake binding and its lifetime remain adapter responsibilities.
 
-Schema version 4 includes the directory. Older binaries refuse it. Restore disables registered endpoints and revokes their credentials so a backup cannot silently resurrect access removed after that snapshot. Operator relink and restore-pause review are required.
+HTTP compatibility mode uses schema 4. Local stdio uses schema 5, adding durable attendance, maintenance leases, request/reply links and workers, with a writer-version fence. Older incompatible writers must be stopped before migration; never rely on a fence as permission for concurrent old/new operation. Restore disables registered endpoints and revokes their credentials so a backup cannot silently resurrect access removed after that snapshot. Operator relink and restore-pause review are required.
+
+## Correlated requests (v0.5 stdio only)
+
+| Tool | Arguments and result |
+| --- | --- |
+| `mail.request` | `recipient`, `body`, `idempotency_key`. Requires send scope and an identifiable own receiving endpoint. Returns the durable send result plus `request_id` and derived `reply_to`. The caller cannot nominate another session as its return endpoint. |
+| `mail.reply` | Request `id`, `claim_token`, `generation`, response `body`, `idempotency_key`, optional `outcome`. Requires valid request ownership and send scope for the recorded return endpoint. Atomically commits a correlated reply and completes the request. Returns reply ID plus original `request_id`. |
+| `mail.request_status` | `id` of the request. Requires claim access to its return endpoint. Returns request `state`, `recipient` and `reply` (`null` or reply ID/state); it does not claim the reply or return its body. |
+
+Claimed requests include `request_id` and `reply_to`; claimed replies include `in_reply_to`. One request has at most one correlated reply. Identical retries use the same sender-scoped idempotency key; conflicting content or correlation is rejected. `ihcp.request` and `ihcp.reply` are reserved kinds in stdio, unavailable through ordinary `mail.send`.
+
+`pending`, `claimed`, `completed` and `reconcile` are mail states, not a universal native receipt protocol. A native queue result is not acceptance or completion of work. Inspect the correlated reply and truthful outcome; a recipient can complete a request without supplying a reply. Late results remain durable even when the requester cannot be notified.
+
+The CLI `chat`/`request` modes send and return the ID. They do not wait for an answer. For active correlated receiving, attend before `mail.request`, wait, match `in_reply_to`, and release attendance in cleanup. The older `exchange` helper uses `mail.send`, not `mail.request`.
+
+In stdio, `mail.send`, `mail.request` and `mail.reply` commit first, then await the configured bounded notification before returning (`timeout_ms` capped at 30000, with bounded shutdown). The response includes `native_notification` dispatch status, never proof of target receipt. A one-shot CLI therefore attempts its configured nudge before closing. Mail stays durable if notification fails; retry only with the original idempotency key. The active-runtime timer remains for pending recovery. Notifications are disabled until explicitly configured.
+
+## Workers (v0.5 stdio only)
+
+| Tool | Arguments and result |
+| --- | --- |
+| `worker.start` | `adapter`, `prompt`, `idempotency_key`. Selects a trusted `runtime.workers` entry whose `allow_endpoints` includes the caller's endpoint. Returns job `id`, `state`, `duplicate`. No executable/model/permission override is accepted. |
+| `worker.status` | Job `id`. Requires its owning principal and inbox scope. Returns `state`, bounded native `result`, `acknowledged`, `cleanup` and `cleanup_action`. |
+| `worker.wait` | Job `id`, optional `timeout_ms` (0–25,000; default 25,000). Bounded wait returning the same status shape; it does not transfer process ownership or acknowledge the result. |
+| `worker.ack` | Job `id`. Requires a recorded terminal result and its owner. Records acknowledgement idempotently; it does not itself promise or perform native erasure. |
+
+Job deduplication covers adapter, prompt and trusted configuration. Changed configuration with the same key conflicts rather than silently rerunning work. Runtime shutdown aborts its owned children. A lost runtime or unverified exit leaves a durable uncertain result/state for reconciliation, not an adopted or restarted process. The CLI `worker` helper holds its connection across bounded waits; the generic one-call client closes its connection and must not be used to start detached work.
+
+Cleanup is a separate maintenance step. It requires a completed successful result, acknowledgement, verified child exit, exact native worker identity and unchanged trusted configuration. Only persisted Codex worker archive/delete is implemented. Failed/uncertain jobs are retained. Retention hours establish a due time, not a guaranteed execution time; maintenance needs an active runtime. Native cleanup does not delete the protocol result record or raw transcript files.
+
+See [native adapters](native-adapters.md) for trusted configuration, version gates and retention choices. Ordinary prompts remain local; no automatic routing or PA relay is installed.

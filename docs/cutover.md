@@ -1,17 +1,19 @@
-# Live cutover
+# Explicit live cutover and recovery
 
-One coordinator owns this transition. Keep credentials, source messages and evidence private.
+**v0.5 remains an unpublished candidate; no live cutover has occurred.** Existing live-cutover/native-configuration policy blocks remain in force. This checklist describes the required transition, not authorization to perform it or bypass a denial.
 
-1. Verify each scoped client and its actual notification path. Record who owns each waiter process and what happens when that session closes. An installed configuration is not proof of a loaded connection.
-2. Agree a barrier with every old sender and consumer, including receipt writers. Stop them; make legacy entry points refuse new work. Preserve their original configuration for recovery.
-3. Back up the current database. Export the frozen file mailbox using [the migration guide](migration.md), then verify hashes, counts and historical sender identities. Do not silently discard unmatched markers.
-4. Stop the service and import offline. Completed history becomes tombstones; uncertain history stays quarantined. Preserve live MCP records already accepted before the barrier.
-5. Restart and verify both inboxes and waiter reconnection. Record MCP as the only live transport. Stale callers must fail rather than deliver to files.
-6. Inspect quarantine against actual outcomes. Requeue only work that is still authorized and known not to have happened. Owner-requested discard uses `control.resolve` with `action:"abandon"`, the observed generation and a reason.
-7. Confirm peers are using MCP, then retire the old watchers and update shared instructions. Source archives and backups have a separate retention decision; deleting a directory is not what makes the transport switch complete.
+One coordinator owns the transition. Keep all identities, credentials, messages and evidence private. Multiple compatible stdio connections may share one database; an older exclusive HTTP writer or an independent second live database must not share its authority.
+
+1. Verify scoped clients and their actual native notification paths on the installed versions. Record endpoint revisions, exact native host/session bindings and process ownership. An emitted config snippet or queued doorbell is not proof of a loaded client or completed work.
+2. Establish a barrier with every old sender/consumer, including receipt writers and active workers. Stop owned processes through their supported lifecycle; resolve uncertain work before cleanup. Preserve original configuration for recovery.
+3. Take a consistent offline snapshot/backup with integrity/hash evidence. Follow [migration](migration.md) for explicit restore to a new private root. Historical file-mailbox export/import is a separately labeled older workflow, not part of every upgrade.
+4. Inspect the restored paused state, counts, dedup identities, request/reply links, worker results and unresolved effects. Revoked registered credentials and disabled endpoints require explicit relink; do not simply copy old token files back.
+5. Once permitted, prepare the exact native binding/config changes for explicit setup, select the sole authority once, and clear only reviewed pauses. Verify harmless bidirectional correlated delivery with the configured adapters. Stale callers must fail rather than use a retired mailbox.
+6. Reconcile uncertain outcomes before `control.resolve` or `control.reset_wake`, using the expected generation and a reason. Requeue only still-authorized work known not to have happened. Never use silence or elapsed time as evidence of takeover.
+7. Record the authority, runtime version/bundle, chosen working/private folders, process owners and recovery checkpoint privately. Retire only verified obsolete adapters. Historical snapshots/backups have a separate cleanup decision.
 
 ## Recovery
 
-Before any rollback, freeze new dispatch and reconcile messages and effects accepted after the barrier. Keep the active database intact. Restore a verified backup into a **separate paused database**, compare it with current state, and explicitly choose which transport will own delivery before resuming. Never restore over the live database, run both writers, replay completed history or fall back automatically to files.
+Freeze new dispatch and reconcile messages/effects accepted after the barrier before rollback. Keep the current database intact. Restore a verified snapshot to a separate paused database and compare it with current state; choose one authority explicitly before resuming. Never restore over live state, dual-write, replay completed history or auto-fallback to files.
 
-Deleting historical snapshots removes that recovery source. If the owner requests cleanup, remove the agreed message copies and backups, keep only necessary duplicate-protection metadata, and record what was actually removed. Logical deletion is not a secure-erasure guarantee.
+Native configuration and cleanup permissions remain independent. Removal of an old directory is not what establishes a cutover. If historical data deletion is explicitly chosen, preserve required duplicate/recovery records and report actual deletion results. Native worker cleanup still requires an acknowledged successful durable result and verified exit; no raw transcript deletion or secure-erasure claim is implied.

@@ -9,6 +9,9 @@ import { Directory } from './directory.mjs';
 const recipient=z.string().min(1).max(100);
 const claim={id:z.string().uuid(),claim_token:z.string().uuid(),generation:z.number().int().positive()};
 const schemas={
+  'mail.request':{recipient,body:z.string().max(65536),idempotency_key:z.string().min(1).max(200)},
+  'mail.reply':{...claim,body:z.string().max(65536),idempotency_key:z.string().min(1).max(200),outcome:z.string().max(4096).default('Replied through IHCP3K')},
+  'mail.request_status':{id:z.string().uuid()},
   'mail.send':{recipient,kind:z.string().min(1).max(64).default('message'),body:z.string().max(65536),idempotency_key:z.string().min(1).max(200)},
   'mail.claim':{recipient,handler_id:z.string().min(1).max(100),limit:z.number().int().min(1).max(20).default(10),lease_s:z.number().int().min(1).max(300).default(300)},
   'mail.attend':{recipient,handler_id:z.string().min(1).max(100),lease_s:z.number().int().min(1).max(120).default(60)},
@@ -41,11 +44,50 @@ Object.assign(permissions,{'wake.reserve':'wake','wake.record':'wake','control.r
 Object.assign(methods,{'wake.reserve':'reserveWake','wake.record':'recordWake','control.reset_wake':'resetWake'});
 Object.assign(permissions,{'mail.attend':'claim','mail.unattend':'claim','mail.wait':'claim'});
 Object.assign(methods,{'mail.attend':'attend','mail.unattend':'unattend','mail.wait':'receive'});
+Object.assign(permissions,{'mail.request':'send','mail.reply':'claim','mail.request_status':'claim','worker.start':'claim','worker.status':'claim','worker.ack':'claim','worker.wait':'claim'});
+Object.assign(methods,{'mail.request':'request','mail.reply':'reply','mail.request_status':'requestStatus'});
+Object.assign(schemas,{
+  'worker.start':{adapter:z.string().min(1).max(100),prompt:z.string().min(1).max(65536),idempotency_key:z.string().min(1).max(200)},
+  'worker.status':{id:z.string().uuid()},
+  'worker.wait':{id:z.string().uuid(),timeout_ms:z.number().int().min(0).max(25000).default(25000)},
+  'worker.ack':{id:z.string().uuid()}
+});
 Object.assign(permissions,{'directory.enroll':'registry','directory.register':'enroll','directory.refresh':'profile','directory.discover':'discover','directory.deregister':'profile'});
 permissions['directory.inspect']='registry';
 const directoryMethods={'directory.inspect':'inspect','directory.enroll':'issue','directory.register':'register','directory.refresh':'refresh','directory.discover':'discover','directory.deregister':'deregister'};
 function equal(a,b) { const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length===bb.length && timingSafeEqual(aa,bb); }
 function reject(res,code,error) { res.writeHead(code,{'Content-Type':'application/json'});res.end(JSON.stringify({error})); }
+
+export function createToolServer(store,directory,principal,abort=new AbortController(),resolvePrincipal=()=>principal){
+    const server=new McpServer({name:'ihcp3k',version:'0.5.0'});
+    for (const [name,inputSchema] of Object.entries(schemas)) {
+      if(name.startsWith('worker.')&&!store.workers)continue;
+      if(!name.startsWith('worker.')&&!directoryMethods[name]&&!store[methods[name]])continue;
+      if (!principal.permissions.includes(permissions[name]) && !(name==='directory.deregister'&&principal.permissions.includes('registry'))) continue;
+      server.registerTool(name,{description:`IHCP3K coordination ${name}`,inputSchema},async (args,extra)=>{
+        try {
+          const signal=AbortSignal.any([abort.signal,extra.signal]);
+          principal=resolvePrincipal();
+          if(!principal)throw new ServiceError('REVOKED');
+          if(!directory.active(principal))throw new ServiceError('REVOKED');
+          const value=name.startsWith('worker.')?await store.workers[name.slice(7)](principal,args):directoryMethods[name]?await directory[directoryMethods[name]](principal,args):await store[methods[name]](principal,args,signal);
+          if(store.notifications&&['mail.send','mail.request','mail.reply'].includes(name)){
+            // Finish the bounded nudge before a one-shot CLI closes its stdio
+            // connection. Mail is already durable even if native dispatch fails.
+            try{value.native_notification=await store.notifications.dispatch(name==='mail.reply'?value.recipient:args.recipient);}
+            catch{value.native_notification={status:'uncertain'};}
+          }
+          const structured=Array.isArray(value)?{messages:value}:value;
+          return {content:[{type:'text',text:JSON.stringify(structured)}],structuredContent:structured};
+        } catch(e) {
+          const code=e instanceof ServiceError?e.code:'INTERNAL_ERROR';
+          if(code==='INTERNAL_ERROR') console.error(JSON.stringify({code,tool:name,exception:e?.name||'Error',frames:String(e?.stack||'').split('\n').slice(1,5).map(line=>line.replace(/\(.*[/\\]/,'('))}));
+          return {isError:true,content:[{type:'text',text:JSON.stringify({error:code})}]};
+        }
+      });
+    }
+    return server;
+}
 
 export function createService(store,{principals,allowedHosts=['127.0.0.1','localhost'],allowedOrigins=[],mode='synthetic',serviceId=null}) {
   if (!Array.isArray(principals) || principals.length===0 || principals.some(p=>!p.token || p.token.length<24)) throw Error('Invalid principal configuration');
@@ -73,24 +115,8 @@ export function createService(store,{principals,allowedHosts=['127.0.0.1','local
       parsed=JSON.parse(Buffer.concat(chunks).toString('utf8'));
     } catch {return reject(res,400,'INVALID_JSON');}
     if (active.size>=64) return reject(res,503,'BUSY');
-    const server=new McpServer({name:'ihcp3k',version:'0.4.0'});
     const abort=new AbortController();
-    for (const [name,inputSchema] of Object.entries(schemas)) {
-      if (!principal.permissions.includes(permissions[name]) && !(name==='directory.deregister'&&principal.permissions.includes('registry'))) continue;
-      server.registerTool(name,{description:`IHCP3K coordination ${name}`,inputSchema},async (args,extra)=>{
-        try {
-          const signal=AbortSignal.any([abort.signal,extra.signal]);
-          if(!directory.active(principal))throw new ServiceError('REVOKED');
-          const value=directoryMethods[name]?await directory[directoryMethods[name]](principal,args):await store[methods[name]](principal,args,signal);
-          const structured=Array.isArray(value)?{messages:value}:value;
-          return {content:[{type:'text',text:JSON.stringify(structured)}],structuredContent:structured};
-        } catch(e) {
-          const code=e instanceof ServiceError?e.code:'INTERNAL_ERROR';
-          if(code==='INTERNAL_ERROR') console.error(JSON.stringify({code,tool:name,exception:e?.name||'Error',frames:String(e?.stack||'').split('\n').slice(1,5).map(line=>line.replace(/\(.*[/\\]/,'('))}));
-          return {isError:true,content:[{type:'text',text:JSON.stringify({error:code})}]};
-        }
-      });
-    }
+    const server=createToolServer(store,directory,principal,abort);
     const transport=new StreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});
     const entry={server,abort};active.add(entry);
     res.on('close',()=>{abort.abort();active.delete(entry);void server.close().catch(()=>{});});

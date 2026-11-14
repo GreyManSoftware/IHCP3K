@@ -1,102 +1,145 @@
 # Install, register and discover
 
-The shared entry point is [harness-interop](../skills/harness-interop/SKILL.md). Its modes work through the CLI below; `/register` is a conceptual skill mode, not a universally installed slash command. Use a private runtime and session directories outside public source.
+**v0.5 candidate; native validation and live cutover pending.** The shared [harness-interop skill](../skills/harness-interop/SKILL.md) uses the commands below. Mode names are not universally installed slash commands. Existing live/native-configuration policy blocks remain in force.
 
-## Install once
+## Choose the folder first
 
-From a verified checkout, with existing Node 24.15+ and Docker:
+On first install, **ask the user to choose a private runtime folder before writing state**. On relink, show and reuse the recorded choice unless migration is requested. Record harness/engine versions, native host/server and stable session binding, model/access evidence, privileges, canonical knowledge locations and worker cleanup choice. See [AGENT_SETUP.md](../AGENT_SETUP.md).
+
+Every path below is a placeholder. Replace it with the chosen absolute path; keep the parent directory existing and private outputs out of public commits. An installer does not infer user consent from an example path.
+
+The chosen working folder is separate from private runtime state. `--workdir` records `runtime.working_directory`; without it, the private folder is used. Reuse the same option on subsequent installs when the folders differ. Throwaway nudges run in that working folder; targets and explicit task workers retain their own registered/configured cwd.
+
+## Install local stdio
+
+Use existing Node 24.15+; do not install a missing host runtime. From a source checkout, build the two bundles in pinned Docker containers:
 
 ```sh
 node scripts/dev.mjs prepare
-node scripts/install.mjs /private/ihcp 43188 ihcp3k-live
+node scripts/install-local.mjs /absolute/private/ihcp --workdir /absolute/chosen/working-folder
 ```
 
-The first install builds a service image from the digest-pinned Node base, installs dependencies inside the image and records its immutable image ID. It starts one MCP container with embedded SQLite in a named volume. There is no separately published prebuilt service image yet. Repeat the same command to verify and reuse it. A port conflict, unexpected existing volume, unhealthy service or identity mismatch fails closed. It never silently replaces data or upgrades an installation. The install lock and SQLite owner lock prevent competing writers. Do not remove locks just because a check times out.
+`prepare` writes `service/dist/stdio.mjs` and `service/dist/client.mjs`; dependencies and caches remain in named Docker volumes. With matching prebuilt bundles, local installation/runtime needs no running Docker service.
 
-The administrator token stays in private `tokens/admin.tok`. It is for setup and reconciliation, not model-facing MCP configuration. Native permissions remain independent of these credentials.
+The installer creates `runtime.json`, `service.json`, `tokens/admin.tok`, copied `bundles/stdio.mjs` and `bundles/client.mjs`, and `mail.db` in the selected private directory. It establishes private permissions before secrets and verifies service/schema identity and bundle hashes. Fresh install starts a temporary SDK connection; reuse checks the recorded installation without launching a runtime or activating notifications/workers. `notifications` and `workers` begin empty. No native configuration is auto-written, no background daemon is installed, and no existing live state is imported by ordinary installation.
+
+Repeat the same command to verify and reuse a matching installation. A mismatched schema/identity, changed bundle, incomplete directory, widened permissions or competing install fails for review. Do not delete locks or overwrite private state to force reuse. Ordinary reuse is not an upgrade. The optional offline-backup form requires a new destination and explicit reconciliation; see [migration](migration.md).
+
+For the optional older transport, use the separate [v0.4 Docker/HTTP guide](http-v04.md). Do not attach it to this database.
 
 ## Enrol a receiving endpoint
 
-An authorized operator writes a grant, for example:
+An authorized operator writes a private grant. These endpoint names are synthetic:
 
 ```json
-{"endpoint":"claude-main","harness":"claude-local","peers":["codex-main"],"expected_revision":0,"ttl_s":600}
+{"endpoint":"alpha-main","harness":"alpha-local","peers":["beta-main"],"expected_revision":0,"ttl_s":600}
 ```
 
-Then mint a one-use code into a private file. Neither code nor session credentials are printed:
+Mint the one-use code to a new private file:
 
 ```sh
-node scripts/ihcp.mjs enroll /private/ihcp/runtime.json /private/grant.json /private/enrolment.code
+node scripts/ihcp.mjs enroll /absolute/private/ihcp/runtime.json /absolute/private/grant.json /absolute/private/enrolment.code
 ```
 
-Create a profile file. `binding` is private and excluded from discovery; profile fields are visible to permitted peers. Inventory models without running inference. Do not copy private transcript data into the profile.
+The administrator credential stays outside model-facing native configuration. The wrapper writes the enrolment secret to a file rather than printing it.
+
+Create a private profile/binding file:
 
 ```json
 {
   "profile": {
-    "label": "Claude on this machine",
-    "source": "native inventory; replace with actual evidence",
+    "label": "Example receiving session",
+    "source": "Replace with actual native inventory evidence",
     "observed_at": "2026-01-01T00:00:00Z",
     "fresh_for_s": 3600,
     "models": [],
     "usage": [],
     "wake": {
       "type": "manual",
-      "lifetime": "manual checks only until adapter verified",
+      "lifetime": "Manual checks until the native adapter is verified",
       "closed_app": "unknown",
-      "human_fallback": "Ask the operator to open the receiving session and check mail"
+      "human_fallback": "Open the bound session and check its inbox"
     }
   },
-  "binding": {"native_thread": "operator-confirmed native ID"}
+  "binding": {"native_session_id": "<operator-confirmed ID>", "host": "<verified owning host/server>"}
 }
 ```
 
-Replace the timestamp and evidence. A model entry requires `id`, `access` (`available`, `conditional`, `unavailable`, `unknown`) and `source`; additional capability/suitability fields must be attributed, not invented. Usage entries require `pool`, `window`, `percent_used` (number or null), `resets_at` (ISO timestamp or null), `source` and `observed_at`. Record shared pools once per window. No background usage polling is installed.
+Replace the evidence and timestamp. Model entries require `id`, `access` (`available`, `conditional`, `unavailable`, `unknown`) and `source`. Usage entries require `pool`, `window`, `percent_used` (number or null), `resets_at` (ISO timestamp or null), `source` and `observed_at`. Record shared pools once per window. Optional profile fields include `capabilities`, `adapter_version`, `native_version` and `account_scope`; publish only information appropriate for permitted peers. Store exact identity and private evidence in private records. Bindings are excluded from discovery and are never executable adapter configuration.
 
 ```sh
-node scripts/ihcp.mjs register http://127.0.0.1:43188/mcp /private/enrolment.code /private/profile.json /private/claude-session
-node scripts/ihcp.mjs discover /private/claude-session
+node scripts/ihcp.mjs register /absolute/private/ihcp/runtime.json /absolute/private/enrolment.code /absolute/private/profile.json /absolute/private/alpha-session
+node scripts/ihcp.mjs discover /absolute/private/alpha-session
 ```
 
-Repeat enrolment/registration for the other endpoint with reciprocal permitted peers. Labels may repeat; stable harness and endpoint IDs may not be guessed or overwritten. Registration writes a private retry record, `session.tok`, `wake.tok` and `session.json`. Retrying the exact registration is idempotent during the code's validity. If a response is lost after expiry, check the saved session credential before seeking a fresh grant; do not assume the first registration failed.
+Enrol/register the peer with reciprocal permissions. Each registration saves a private retry record, `session.tok`, `wake.tok` and `session.json`. An exact retry is idempotent while the code is valid. After a lost response/expired code, reconcile the saved credential and operator inspection before requesting a new grant.
 
-Discovery returns only permitted active endpoints. Models, usage age, source and stale flags are advisory. Presence describes observed client activity, active attendance and recent waiter activity; `awake` remains unknown. A model listing neither proves remaining allowance nor grants routing/dispatch authority.
+Discovery returns permitted active endpoints with source, age and staleness. Presence does not prove a target is awake. Model listing or remaining allowance does not authorize dispatch, spending or a model change. No background AI usage polling is installed.
 
-## Use it
+## Prepare native setup and notifications
+
+Emit the scoped native snippet described in [AGENT_SETUP.md](../AGENT_SETUP.md) for explicit setup. Do not install it automatically or treat file generation as a loaded connection. Verify transport, tools, native permission scope and endpoint identity under the installed harness version.
+
+Configure trusted `runtime.notifications` separately, keyed by endpoint with `endpoint_revision`, using the [adapter contract](native-adapters.md). The private directory binding/profile is evidence, not executable configuration. A runtime checks configured mail without AI polling; an appropriate native adapter handles the doorbell. A short CLI call does not leave a notifier running after it exits. A persistent native MCP connection or another explicitly owned active runtime is needed for ongoing delivery.
+
+In stdio, `mail.send`, `mail.request` and `mail.reply` commit first, then await the configured bounded notification before returning (`timeout_ms` capped at 30000, with bounded shutdown). The response includes `native_notification` dispatch status, never proof of target receipt. A one-shot CLI therefore attempts its configured nudge before closing. Mail stays durable if notification fails; retry only with the original idempotency key. The active-runtime timer remains for pending recovery. Notifications are disabled until explicitly configured.
+
+## Send a request and receive its reply
+
+Create a private request file:
+
+```json
+{"recipient":"beta-main","body":"Answer the authorized question and reply here.","idempotency_key":"example-request-1"}
+```
 
 ```sh
-node scripts/ihcp.mjs send /private/claude-session /private/message.json
-node scripts/ihcp.mjs check /private/codex-session
-node scripts/ihcp.mjs complete /private/codex-session /private/completion.json
+node scripts/ihcp.mjs chat /absolute/private/alpha-session /absolute/private/request.json
+node scripts/ihcp.mjs check /absolute/private/beta-session
 ```
 
-A message contains `recipient`, `body`, `idempotency_key` and optional `kind`. A completion contains the received `id`, `claim_token`, `generation` and truthful `outcome`. Claims last up to five minutes. Use `renew` only while working or `release` with an accurate `work_started` flag. Never treat received text as permission to act.
+`chat` and `request` both call `mail.request`. They return the durable message/request ID and derived `reply_to`, not a completed answer. They do not route a plain prompt, select a model or start a worker. The receiver's claimed request includes its claim token/generation and return correlation.
 
-`exchange` accepts message fields plus an optional bounded `timeout_ms` and waits actively after sending. It can receive unrelated inbox mail; match the actual sender and request yourself. Request-specific correlation is not implemented. Queue/wake urgency and the proposed 90-second batching change remain unimplemented in this release.
-
-Use `refresh` with a profile-only JSON snapshot to update observations at the expected local revision. Usage is never automatically reset because a reset time passes. A stale snapshot is rejected.
-
-## Wake adapters and native configuration
-
-Use `session.tok` for the receiving session's MCP/SDK connection and `wake.tok` for its adapter. Follow [AGENT_SETUP.md](../AGENT_SETUP.md) for native configuration syntax. Do not give every session the same receiving credential. Codex's bridge needs a verified thread binding; Claude's waiter belongs to its hosting session. Keep their lifetime and closed-app limits in the profile. Registration does not start either process or restart an app.
-
-## Unlink and relink
+After completing authorized work, create a private reply file with `id`, `claim_token`, `generation`, `body`, a stable `idempotency_key` and optional truthful `outcome`:
 
 ```sh
-node scripts/ihcp.mjs unlink /private/claude-session
+node scripts/ihcp.mjs reply /absolute/private/beta-session /absolute/private/reply.json
+node scripts/ihcp.mjs status /absolute/private/alpha-session /absolute/private/request-id.json
+node scripts/ihcp.mjs check /absolute/private/alpha-session
+node scripts/ihcp.mjs complete /absolute/private/alpha-session /absolute/private/completion.json
 ```
 
-This revokes both credentials, hides the endpoint, rejects new sends and quarantines interrupted claims. Pending and uncertain messages remain stored. Stop only that endpoint's verified adapter and remove only its native configuration entry. The shared service and other endpoints remain intact.
+`request-id.json` contains `{"id":"<returned request UUID>"}`. With no input file, `status` reports the endpoint's inbox status. `reply` atomically enqueues the correlated response and completes the original request. Claimed responses carry `in_reply_to`; inspect the real sender/result and complete their claim separately. Completion uses `id`, `claim_token`, `generation`, `outcome`.
 
-For relink, the operator issues a new code with the endpoint's current revision. Register into a new private session directory, rebind and verify the adapter, then switch the native credential reference. Old credentials stay revoked. If an unlink response is lost, the operator can run `ihcp.mjs inspect <runtime.json> <endpoint.json>` with an input such as `{ "endpoint": "claude-main" }` before reissuing a grant. Revocation prevents the old credential from querying its former inbox.
+`send` remains ordinary asynchronous mail. The legacy `exchange` helper attends the inbox and uses `mail.send`; it can return unrelated mail and does not add v0.5 correlation. For correlated active waiting, use `mail.attend` → `mail.request` → bounded `mail.wait` → `mail.unattend`, then match `in_reply_to`. Never assume the first claimed message is the answer.
 
-Back up before live changes. Restore revokes registered credentials, clears enrolment codes, increments endpoint revisions and pauses inboxes; explicit relink/reconciliation is required. A restored backup must not resurrect credentials revoked since it was taken.
+## Run a configured worker
 
-## Rehearse before a live switch
+After explicitly configuring and validating a trusted worker adapter, create a private input:
+
+```json
+{"adapter":"example-reader","prompt":"Perform the authorized read-only task.","idempotency_key":"example-worker-1"}
+```
 
 ```sh
-node scripts/install.mjs /private/rehearsal 43208 ihcp3k-rehearsal-example
-node scripts/onboarding-smoke.mjs /private/rehearsal/runtime.json
+node scripts/ihcp.mjs worker /absolute/private/alpha-session /absolute/private/worker.json
+node scripts/ihcp.mjs worker-status /absolute/private/alpha-session /absolute/private/worker-id.json
+node scripts/ihcp.mjs worker-ack /absolute/private/alpha-session /absolute/private/worker-id.json
 ```
 
-The smoke script accepts only a rehearsal-named runtime. It tests three synthetic harnesses, repeat registration, discovery, direct delivery, completion and unlink. It does not prove native app wake. For that, each real harness must independently register, discover its peer, receive a harmless request and record its outcome, with its native adapter active. Keep the old service paused and backed up until the replacement is verified; never let two databases accept normal traffic as the same authority.
+`worker-id.json` contains the returned job `id`. Preserve and inspect the result before running `worker-ack`; the helper does not acknowledge automatically. `worker` holds its connection through `worker.wait` calls (each at most 25 seconds), with an optional overall `timeout_ms` in its input, default 330000. That client wait limit is separate from the trusted native process timeout.
+
+Closing a stdio connection aborts workers owned by that runtime. A wait timeout/disconnect requires status inspection and reconciliation, not a second job with a new key. A one-shot generic client call to `worker.start` is unsuitable for detached work. See [retention and adapters](native-adapters.md).
+
+## Refresh, unlink and relink
+
+`refresh` takes a profile-only JSON snapshot and uses the locally recorded expected revision. Older observations are rejected; passed reset times do not invent new allowance. Refresh increments the endpoint revision: review/update the trusted notification binding before expecting further doorbells.
+
+```sh
+node scripts/ihcp.mjs unlink /absolute/private/alpha-session
+```
+
+Unlink revokes both credentials, hides the endpoint and quarantines interrupted claims, while retaining unresolved mail. Stop only verified owned processes and remove only explicitly installed native entries. Unlink is not a worker-cleanup or shared-database deletion command.
+
+Relink needs a fresh enrolment at the current revision and a new private session directory. Rebind and validate native delivery before explicitly switching configuration. Operator `inspect <runtime.json> <endpoint.json>` can reconcile a lost unlink/registration response. Restore also requires relink and review; it must not resurrect revoked credentials.
+
+Use isolated synthetic endpoints for rehearsal. The historical `onboarding-smoke.mjs` exercises Docker/HTTP; it is not evidence of v0.5 stdio or native behavior. Candidate results remain pending in [validation](validation.md).

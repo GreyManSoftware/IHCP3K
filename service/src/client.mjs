@@ -1,15 +1,64 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 
-export async function connect({url,tokenFile}) {
-  const target=new URL(url);
-  if(target.protocol!=='http:' || !['127.0.0.1','localhost','[::1]'].includes(target.hostname) || target.username || target.password)throw Error('LOOPBACK_REQUIRED');
-  const token=fs.readFileSync(tokenFile,'utf8').trim();
-  const client=new Client({name:'ihcp3k-local-client',version:'0.4.0'});
-  try {await client.connect(new StreamableHTTPClientTransport(target,{requestInit:{headers:{Authorization:`Bearer ${token}`}}}),{timeout:10000});}
+export function requireNode(version=process.versions.node) {
+  const [major,minor]=version.split('.').map(Number);
+  if(!(major>24||major===24&&minor>=15))throw Error('NODE_24_15_REQUIRED');
+}
+const readJSON=file=>JSON.parse(fs.readFileSync(file,'utf8').replace(/^\uFEFF/,''));
+const digest=file=>createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+// The selected private manifest is the trust root, not a general command launcher.
+// Hashes detect replacement/corruption; they do not defend against the same OS user.
+export function readRuntime(runtimeFile) {
+  requireNode();
+  const file=path.resolve(runtimeFile),dir=path.dirname(file),runtime=readJSON(file);
+  if(runtime.transport!=='stdio'||runtime.version!=='0.5.0'||runtime.schema_version!==5||runtime.private_dir!==dir||
+    !/^[a-f0-9-]{36}$/.test(runtime.service_id??''))throw Error('INVALID_STDIO_RUNTIME');
+  const expected={database:path.join(dir,'mail.db'),service_config:path.join(dir,'service.json'),bundle:path.join(dir,'bundles','stdio.mjs'),client_bundle:path.join(dir,'bundles','client.mjs')};
+  for(const [key,value] of Object.entries(expected))if(runtime[key]!==value)throw Error('RUNTIME_PATH_MISMATCH');
+  for(const entry of [dir,file,path.join(dir,'bundles'),runtime.bundle,runtime.client_bundle,runtime.service_config]) {
+    if(fs.lstatSync(entry).isSymbolicLink()||fs.realpathSync(entry)!==path.resolve(entry))throw Error('RUNTIME_LINK_NOT_ALLOWED');
+  }
+  if(digest(runtime.bundle)!==runtime.bundle_sha256||digest(runtime.client_bundle)!==runtime.client_sha256)throw Error('RUNTIME_BUNDLE_MISMATCH');
+  const config=readJSON(runtime.service_config);
+  if(config.service_id!==runtime.service_id||config.mode!=='live'||config.synthetic!==false)throw Error('SERVICE_IDENTITY_MISMATCH');
+  return runtime;
+}
+export async function verifyDatabase(runtime) {
+  if(!fs.existsSync(runtime.database))throw Error('RUNTIME_DATABASE_MISSING');
+  if(fs.lstatSync(runtime.database).isSymbolicLink()||fs.realpathSync(runtime.database)!==runtime.database)throw Error('RUNTIME_LINK_NOT_ALLOWED');
+  const {DatabaseSync}=await import('node:sqlite');
+  const db=new DatabaseSync(runtime.database,{readOnly:true});
+  try {
+    if(db.prepare('PRAGMA user_version').get().user_version!==5)throw Error('RUNTIME_SCHEMA_MISMATCH');
+    if(db.prepare("SELECT value FROM metadata WHERE key='writer_version'").get()?.value!=='5')throw Error('RUNTIME_WRITER_MISMATCH');
+    if(db.prepare("SELECT value FROM metadata WHERE key='service_id'").get()?.value!==runtime.service_id)throw Error('SERVICE_IDENTITY_MISMATCH');
+  } finally {db.close();}
+}
+export async function connect({url,runtimeFile,tokenFile}) {
+  if(Boolean(url)===Boolean(runtimeFile))throw Error('ONE_TRANSPORT_REQUIRED');
+  let transport;
+  if(runtimeFile) {
+    const runtime=readRuntime(runtimeFile);
+    if(runtime.initialized!==false||fs.existsSync(runtime.database))await verifyDatabase(runtime);
+    // Only file paths enter argv. Credentials themselves never do. The SDK owns
+    // child lifetime, including bounded termination when the client closes.
+    transport=new StdioClientTransport({command:process.execPath,args:[runtime.bundle,path.resolve(runtimeFile),path.resolve(tokenFile)],cwd:runtime.private_dir,stderr:'pipe',env:{NODE_OPTIONS:'',NODE_PATH:''}});
+    transport.stderr?.resume();
+  } else {
+    const target=new URL(url);
+    if(target.protocol!=='http:' || !['127.0.0.1','localhost','[::1]'].includes(target.hostname) || target.username || target.password)throw Error('LOOPBACK_REQUIRED');
+    const token=fs.readFileSync(tokenFile,'utf8').trim();
+    transport=new StreamableHTTPClientTransport(target,{requestInit:{headers:{Authorization:`Bearer ${token}`}}});
+  }
+  const client=new Client({name:'ihcp3k-local-client',version:'0.5.0'});
+  try {await client.connect(transport,{timeout:10000});}
   catch {await client.close().catch(()=>{});throw Error('MCP_CONNECT_FAILED');}
   return client;
 }
@@ -39,10 +88,10 @@ export async function exchange(client,{inbox,handler_id,timeout_ms=25000,...mess
   return response;
 }
 export async function main(args=process.argv.slice(2)) {
-  const [url,tokenFile,tool,inputFile]=args;
-  if(!url || !tokenFile || !tool)throw Error('Usage: client <loopback-url> <token-file> <tool> [input-json-file; otherwise stdin]');
+  const [location,tokenFile,tool,inputFile]=args;
+  if(!location || !tokenFile || !tool)throw Error('Usage: client <loopback-url|runtime.json> <token-file> <tool> [input-json-file; otherwise stdin]');
   const input=JSON.parse(fs.readFileSync(inputFile||0,'utf8'));
-  const client=await connect({url,tokenFile});
+  const client=await connect({...(/^[a-z]+:\/\//i.test(location)?{url:location}:{runtimeFile:location}),tokenFile});
   try{process.stdout.write(JSON.stringify(await (tool==='exchange'?exchange(client,input):call(client,tool,input)))+'\n');}
   finally{await client.close();}
 }

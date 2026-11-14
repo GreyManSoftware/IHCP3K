@@ -18,7 +18,7 @@ export class Directory {
       CREATE TABLE IF NOT EXISTS directory_audit (id INTEGER PRIMARY KEY, principal TEXT NOT NULL, action TEXT NOT NULL, endpoint TEXT NOT NULL, at INTEGER NOT NULL);
     `);
     for(const row of this.db.prepare('SELECT id FROM endpoints').all())store.recipients.add(row.id);
-    this.db.exec('PRAGMA user_version=4;');
+    store.transaction(()=>{if(this.db.prepare('PRAGMA user_version').get().user_version<4)this.db.exec('PRAGMA user_version=4;');});
     store.directory=this;
   }
   audit(p,action,id){this.db.prepare('INSERT INTO directory_audit(principal,action,endpoint,at) VALUES(?,?,?,?)').run(p.id,action,id,this.store.now());}
@@ -97,18 +97,18 @@ export class Directory {
       this.db.prepare('UPDATE enrolments SET used_hash=?,result_json=? WHERE hash=?').run(payloadHash,JSON.stringify(answer),p.enrolment_hash);
       this.db.prepare("UPDATE messages SET state='reconcile',deadline=NULL WHERE recipient=? AND state='claimed'").run(g.endpoint);
       this.db.prepare("UPDATE outbox SET state='reconcile' WHERE recipient=? AND state='claimed'").run(g.endpoint);
+      this.store.clearAttendance?.(g.endpoint) ?? this.store.attendees.delete(g.endpoint);
+      this.db.prepare("UPDATE wake_dispatch SET state='uncertain',generation=generation+1,token_hash=NULL WHERE recipient=? AND state!='idle'").run(g.endpoint);
       applied=true;this.audit(p,'register',g.endpoint);return answer;
     });
     if(!applied)return result;
     this.store.recipients.add(result.endpoint);
-    this.store.attendees.delete(result.endpoint);
-    // Fence an old adapter without pretending an uncertain dispatch did not happen.
-    this.db.prepare("UPDATE wake_dispatch SET state='uncertain',generation=generation+1,token_hash=NULL WHERE recipient=? AND state!='idle'").run(result.endpoint);
     this.store.emit('changed',result.endpoint);return result;
   }
   refresh(p,{endpoint,expected_revision,profile}){
     check(this.active(p)&&p.scopes?.profile?.includes(endpoint),'FORBIDDEN');this.validateProfile(profile);
     return this.store.transaction(()=>{
+      check(this.active(p)&&p.scopes?.profile?.includes(endpoint),'FORBIDDEN');
       const row=this.db.prepare('SELECT * FROM endpoints WHERE id=? AND active=1').get(endpoint);
       check(row&&row.revision===expected_revision,'REVISION_CONFLICT');
       const old=JSON.parse(row.profile_json);
@@ -125,21 +125,23 @@ export class Directory {
     const rows=this.db.prepare('SELECT * FROM endpoints WHERE active=1 AND id>? ORDER BY id').all(after).filter(r=>permitted.includes(r.id)).slice(0,limit+1);
     return {entries:rows.slice(0,limit).map(r=>{
       const profile=JSON.parse(r.profile_json),age=Math.max(0,(this.store.now()-Date.parse(profile.observed_at))/1000);
-      return {endpoint:r.id,harness:r.harness,revision:r.revision,profile,age_s:age,stale:age>profile.fresh_for_s,advisory:true,usage:profile.usage.map(u=>({...u,age_s:Math.max(0,(this.store.now()-Date.parse(u.observed_at))/1000),stale:this.store.now()-Date.parse(u.observed_at)>300000,advisory:true})),presence:{last_client_seen:r.last_seen?iso(r.last_seen):null,attendance_until:this.store.attendance(r.id)?.deadline?iso(this.store.attendance(r.id).deadline):null,waiter_last_seen:this.store.lastSeen.get(r.id)?iso(this.store.lastSeen.get(r.id)):null,awake:'unknown'},can_send:p.scopes.send?.includes(r.id)??false};
+      return {endpoint:r.id,harness:r.harness,revision:r.revision,profile,age_s:age,stale:age>profile.fresh_for_s,advisory:true,usage:profile.usage.map(u=>({...u,age_s:Math.max(0,(this.store.now()-Date.parse(u.observed_at))/1000),stale:this.store.now()-Date.parse(u.observed_at)>300000,advisory:true})),presence:{last_client_seen:r.last_seen?iso(r.last_seen):null,attendance_until:this.store.attendance(r.id)?.deadline?iso(this.store.attendance(r.id).deadline):null,waiter_last_seen:(this.store.waiterLastSeen?.(r.id)??this.store.lastSeen.get(r.id))?iso(this.store.waiterLastSeen?.(r.id)??this.store.lastSeen.get(r.id)):null,awake:'unknown'},can_send:p.scopes.send?.includes(r.id)??false};
     }),next_after:rows.length>limit?rows[limit-1].id:null};
   }
   deregister(p,{endpoint,expected_revision}){
     check(p.permissions.includes('registry')||(this.active(p)&&p.scopes?.profile?.includes(endpoint)),'FORBIDDEN');
     const result=this.store.transaction(()=>{
+      check(p.permissions.includes('registry')||(this.active(p)&&p.scopes?.profile?.includes(endpoint)),'FORBIDDEN');
       const row=this.db.prepare('SELECT * FROM endpoints WHERE id=?').get(endpoint);
       check(row&&row.revision===expected_revision,'REVISION_CONFLICT');
       this.db.prepare('UPDATE endpoints SET active=0,revision=revision+1 WHERE id=?').run(endpoint);
       this.db.prepare('UPDATE credentials SET revoked=1 WHERE endpoint=?').run(endpoint);
       this.db.prepare("UPDATE messages SET state='reconcile',deadline=NULL WHERE recipient=? AND state='claimed'").run(endpoint);
       this.db.prepare("UPDATE outbox SET state='reconcile' WHERE recipient=? AND state='claimed'").run(endpoint);
+      this.store.clearAttendance?.(endpoint) ?? this.store.attendees.delete(endpoint);
       this.audit(p,'deregister',endpoint);
       return {endpoint,active:false,revision:row.revision+1,pending:this.store.pending(endpoint)};
     });
-    this.store.attendees.delete(endpoint);this.store.emit('changed',endpoint);return result;
+    this.store.emit('changed',endpoint);return result;
   }
 }

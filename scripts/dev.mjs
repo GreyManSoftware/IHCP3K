@@ -21,11 +21,15 @@ function prepare() {
   for(const relative of ['service','adapters/claude-waiter'])fs.mkdirSync(path.join(root,relative,'node_modules'),{recursive:true});
   tooling('service','ihcp3k-service-deps','npm ci --ignore-scripts --no-audit --no-fund');
   tooling('adapters/claude-waiter','ihcp3k-waiter-deps','npm ci --no-audit --no-fund && npm run build');
-  docker(['run','--rm','--cpus','2','--mount',`type=bind,source=${root},target=/repo`,'--mount','type=volume,source=ihcp3k-service-deps,target=/repo/service/node_modules','--mount','type=volume,source=ihcp3k-waiter-deps,target=/repo/adapters/claude-waiter/node_modules','-w','/repo',image,'./adapters/claude-waiter/node_modules/esbuild/bin/esbuild','service/src/client.mjs','--bundle','--platform=node','--format=esm','--packages=bundle','--outfile=service/dist/client.mjs']);
+  docker(['run','--rm','--cpus','2','--mount',`type=bind,source=${root},target=/repo`,'--mount','type=volume,source=ihcp3k-service-deps,target=/repo/service/node_modules','--mount','type=volume,source=ihcp3k-waiter-deps,target=/repo/adapters/claude-waiter/node_modules','-w','/repo',image,'./adapters/claude-waiter/node_modules/esbuild/bin/esbuild','service/src/client.mjs','service/src/stdio.mjs','--bundle','--platform=node','--target=node24','--format=esm','--packages=bundle','--outdir=service/dist','--out-extension:.js=.mjs',"--banner:js=import{createRequire}from'node:module';const require=createRequire(import.meta.url);"]);
 }
 const action=process.argv[2]||'status';
 try {
   if(action==='prepare')prepare();
+  else if(action==='test-local') {
+    prepare();
+    docker(['run','--rm','--cpus','2','--mount',`type=bind,source=${root},target=/repo,readonly`,'-w','/repo',image,'node','--test','--test-concurrency=1','scripts/local-install.test.mjs']);
+  }
   else if(action==='test') {
     const lockPath=process.env.IHCP3K_TEST_LOCK||path.join(root,'.local','fullrun.lock');
     if(!process.env.IHCP3K_TEST_LOCK)fs.mkdirSync(path.dirname(lockPath),{recursive:true});
@@ -37,6 +41,7 @@ try {
       tooling('adapters/claude-waiter','ihcp3k-waiter-deps','npm test');
       docker(['run','--rm','--cpus','2','--mount',`type=bind,source=${path.join(root,'scripts')},target=/scripts,readonly`,image,'node','--test','/scripts/native-queue.test.mjs']);
       docker(['run','--rm','--cpus','2','--mount',`type=bind,source=${root},target=/repo,readonly`,image,'node','--test','/repo/adapters/claude-legacy/test/*.test.mjs']);
+      docker(['run','--rm','--cpus','2','--mount',`type=bind,source=${root},target=/repo,readonly`,image,'node','--test','--test-concurrency=1','/repo/scripts/local-install.test.mjs']);
     } finally {if(fd!==undefined){fs.closeSync(fd);fs.unlinkSync(lockPath);}}
   } else if(action==='start') {
     fs.mkdirSync(path.join(root,'service','node_modules'),{recursive:true});
@@ -47,5 +52,5 @@ try {
     if(label!=='synthetic')throw Error('Refusing to stop an unlabelled container');
     docker(['stop',name]);
   } else if(action==='status')docker(['ps','-a','--filter',`name=^/${name}$`,'--format','{{.Names}} {{.Status}} {{.Ports}}']);
-  else throw Error('Usage: node scripts/dev.mjs prepare|test|start|stop|status');
+  else throw Error('Usage: node scripts/dev.mjs prepare|test-local|test|start|stop|status');
 } catch(error) {console.error(error.message);process.exitCode=1;}

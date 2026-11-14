@@ -1,15 +1,23 @@
 # Release scope
 
-The MCP mail service, scoped credentials, native connection helpers, Codex doorbell, Claude waiter, backup/restore and offline legacy importer are implemented. Validation evidence is in [validation.md](validation.md).
+## v0.5 candidate
 
-Version 0.4 adds operator-scoped registration, directory/model/usage snapshots, a shared skill and an idempotent packaged-container installer. The isolated installation rehearsal passed; the real two-harness reinstall remains incomplete.
+Implementation resumed after research. The candidate is **not published or cut over live**; existing live/native-configuration policy blocks remain. See [validation](validation.md) for reported checks and remaining evidence gaps.
 
-Remaining work:
+The candidate adds local MCP stdio on an existing Node runtime, a shared SQLite schema, idempotent private installation, explicit correlated requests/replies, trusted native notifications and bounded worker jobs/results. It retains the directory and scoped credentials. The optional Docker/HTTP deployment remains v0.4 compatibility mode, without the new stdio request/worker APIs.
 
-- Wider clean-machine and harness-version testing, including app-closed wake and OS-start recovery.
-- Credential boundaries stronger than a shared OS account where needed.
-- Automated backup retention and storage monitoring.
-- Service-owned session/handover records, canonical knowledge adapters, automated native model inventory and deterministic dispatch policy.
-- Resource coordination with configurable CPU/GPU/memory thresholds.
+First installation asks for private state and records the user-chosen working folder, versions, model evidence, privileges, native bindings and retention. Native configuration is prepared for explicit setup. Offline backup restore to a new directory is distinct from live cutover and does not switch callers or unpause mail.
 
-The setup guide describes safe conventions for those future integrations. It does not claim the service already performs them.
+Ordinary prompts stay local. A PA is optional. Codex notifications are deterministic; Claude notification workers require a validated no-persist messaging combination. Copilot workers are explicitly experimental; the documented existing-session AHP route is not yet a validated live integration. No automatic model routing or paid fallback is introduced.
+
+## Remaining gates
+
+- Installed-version native behavior: idle/busy/unloaded targets, ambiguity, denials, reconnect, cancellation, acknowledgements and process ownership.
+- Copilot adapter behavior and existing-host access; documented routes may need version-specific changes.
+- Archive/delete visibility, ownership, worktree effects and actual retention, distinct from process exit and protocol results.
+- Explicit single-authority migration/reconciliation and an authorized native configuration/cutover step.
+- Wider clean-machine and concurrent-chat testing; app-closed delivery and OS-start recovery remain unverified.
+
+## Later work
+
+Automatic native model inventory, deterministic dispatch policy, service-backed resource scheduling, session/handover records, canonical-knowledge adapters, automated backup retention and stronger hostile-client isolation remain separate work. IHCP3K does not pool allowances, sync memory or transfer session ownership today.

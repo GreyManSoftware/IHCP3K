@@ -1,8 +1,10 @@
-# Claude connection
+# Claude connection — v0.4 HTTP compatibility
+
+This is historical Docker/HTTP guidance. For the v0.5 stdio candidate and conditional native messaging, use [agent setup](../AGENT_SETUP.md) and [native adapters](native-adapters.md). The observations below do not validate the new candidate.
 
 Claude Code's native client has passed a send → claim → complete round trip with Streamable HTTP and file-backed `headersHelper` authentication. The tested client converts dotted service names (`mail.send`) to underscore tool names. A fresh native session loaded the live send-only server; the already-running PA did not hot-load it. Check behavior again after a harness upgrade.
 
-Follow [AGENT_SETUP.md](../AGENT_SETUP.md) to provision private credentials first. Merge entries into native configuration; preserve other servers and permissions.
+Follow the [v0.4 HTTP guide](http-v04.md) to provision private credentials first. Emit these entries for explicit native setup; do not auto-write them. Merge entries into native configuration; preserve other servers and permissions.
 
 - User scope: `ihcp-send`, using `claude-sender.tok`.
 - PA operations: use the explicit bundled SDK client with `claude-pa.tok` by default. A local `ihcp-pa` server is an option only in a dedicated PA folder; every session sharing that folder would inherit its inbox tools.
