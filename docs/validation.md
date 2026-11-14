@@ -1,8 +1,8 @@
 # Validation
 
-## v0.5 candidate — not published or live
+## v0.5 experimental prerelease
 
-This candidate has not been published or cut over live. Native tests below distinguish working transport from unresolved client approval and notification behavior. No clean end-to-end native installation is implied by local tests.
+The tests below distinguish working transport from remaining native behavior gaps. An existing production installation was not migrated during this validation. No clean end-to-end native installation is implied by local tests.
 
 Validation completed on 14 November 2026 against the candidate source and freshly built bundles:
 
@@ -39,7 +39,7 @@ New native adapter execution is fixture/mock-tested beyond the earlier peer evid
 - Codex archive/delete effects, exact worker identity, acknowledgement gating and delayed cleanup after restart. Command presence is not proof of erasure.
 - Copilot experimental worker results or live AHP access to an existing owning host/session. Documented routes remain untested and may need changes.
 - Native configuration reload, concurrent-chat endpoint bindings and harness-specific stdio process ownership. No one-process-per-chat guarantee is assumed.
-- App-closed delivery, unattended startup, a complete authorized live migration or publication.
+- App-closed delivery, unattended startup or a complete production migration.
 
 Acceptance should exercise harmless owned targets, permission denial, duplicate/conflicting sends, reply correlation, late replies, crash/reconnect, uncertain outcomes and actual exit. Record versions, evidence date and observed results separately from documentation/interface claims. Preserve private runtime evidence outside public source.
 

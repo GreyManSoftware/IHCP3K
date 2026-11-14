@@ -5,7 +5,7 @@ description: Install or link IHCP3K, discover registered harnesses and models, e
 
 # Harness interop
 
-This is the **v0.5 candidate** skill, not a published release or evidence of live cutover. Locate the verified IHCP3K checkout and recorded private runtime from the user's configuration. Consult that checkout's `AGENT_SETUP.md`, `docs/onboarding.md` and `docs/protocol.md` for setup and commands; consult `docs/native-adapters.md` only when configuring notifications or workers. Do not invent paths or treat a chat title as an endpoint identity.
+This is the **v0.5 experimental prerelease** skill. It is not evidence of a production migration or universal native support. Locate the verified IHCP3K checkout and recorded private runtime from the user's configuration. Consult that checkout's `AGENT_SETUP.md`, `docs/onboarding.md` and `docs/protocol.md` for setup and commands; consult `docs/native-adapters.md` only when configuring notifications or workers. Do not invent paths or treat a chat title as an endpoint identity.
 
 ## Install or relink
 

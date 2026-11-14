@@ -1,6 +1,6 @@
 # Install, register and discover
 
-**v0.5 candidate; native validation and live cutover pending.** The shared [harness-interop skill](../skills/harness-interop/SKILL.md) uses the commands below. Mode names are not universally installed slash commands. Respect current native execution restrictions and record actual failures; do not infer a universal restriction from an earlier deployment batch.
+**v0.5 experimental prerelease; see the validation report for native coverage.** The shared [harness-interop skill](../skills/harness-interop/SKILL.md) uses the commands below. Mode names are not universally installed slash commands. Respect current native execution restrictions and record actual failures; do not infer a universal restriction from an earlier deployment batch.
 
 ## Choose the folder first
 

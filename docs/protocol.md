@@ -1,6 +1,6 @@
 # MCP contract
 
-**v0.5 candidate; validation pending.** Default transport: local MCP stdio using the official SDK, an existing Node runtime and one shared SQLite authority. A connection receives the private runtime and credential-file paths; credentials bind the endpoint explicitly. Process lifetime does not establish a chat identity.
+**v0.5 experimental prerelease.** Default transport: local MCP stdio using the official SDK, an existing Node runtime and one shared SQLite authority. A connection receives the private runtime and credential-file paths; credentials bind the endpoint explicitly. Process lifetime does not establish a chat identity.
 
 Optional Docker/HTTP remains **v0.4 compatibility mode**: `/mcp`, Streamable HTTP, `Authorization: Bearer <token>`, stateless transport sessions and one exclusive SQLite owner. It does not expose the correlated request or worker tools below. Never run the old HTTP owner and new stdio writers against the same live database. Synthetic fixture and private live configuration remain separate.
 

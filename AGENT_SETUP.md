@@ -1,6 +1,6 @@
 # Agent setup and operation
 
-This guide describes the **v0.5 candidate**, not a published release or completed live cutover. Implementation has resumed after research; validation remains pending. Native setup and cutover require explicit scope and installed-version validation. A historical rejection of a deployment batch is not evidence that every installation path is blocked; never bypass an actual denial.
+This guide installs the **v0.5 experimental prerelease** from scratch. It requires no previous session, mailbox or installation. See `docs/validation.md` for measured results and remaining limitations. Native setup and cutover require explicit scope and installed-version validation. A historical rejection of a deployment batch is not evidence that every installation path is blocked; never bypass an actual denial.
 
 ## First install: ask before writing
 
@@ -17,6 +17,16 @@ Also establish:
 - User-chosen canonical skill/agent-definition locations and project memory locations. Reuse existing sources; do not make separately edited harness copies.
 
 Keep the inventory in private operator records, with peer-visible observations in the endpoint profile and identity details in its private binding. Registration does not discover these facts automatically. No PA is required and ordinary prompts remain local.
+
+## Install from a release in a new session
+
+1. Ask where the user wants the source/bundle files and **separate private runtime state**. Neither folder needs to be a previous installation. Do not reuse credentials or earlier session memories.
+2. Download `IHCP3K-0.5.0.zip` and `IHCP3K-0.5.0.zip.sha256` from [the v0.5.0 release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v0.5.0). Verify the ZIP SHA-256 against the checksum before extracting into the chosen code folder. These assets include both runtime bundles; the GitHub-generated source archives do not.
+3. Check existing Node is 24.15+; do not install missing software without following the user's environment policy. With this ZIP, no npm install or Docker build is needed.
+4. From the extracted code folder, run `node scripts/install-local.mjs <chosen-private-directory> --workdir <chosen-working-folder>`. The private directory must be new and its parent must exist. These are explicit absolute paths selected with the user, not literal placeholders.
+5. Follow [onboarding](docs/onboarding.md) to enrol/register each endpoint, then [native setup](docs/native-setup.md) for the harness's scope and first-use approval. Test discovery, correlated mail, notification and unlink. Each receiving identity must remain scoped to its intended session.
+
+For a source checkout without the prebuilt ZIP, use the build instructions below. A new or unknown harness must pass its own capability checks; do not infer support from the Claude–Codex rehearsal. Copilot is experimental and may require changes.
 
 ## Prerequisites and install
 

@@ -1,6 +1,6 @@
 # Architecture
 
-**v0.5 candidate; local tests pass, not published or cut over live.** Native adapter behavior remains subject to installed-version validation. The default runtime is local MCP stdio using an existing Node runtime. Compatible runtime connections share one private SQLite database. The database is the coordination authority; process identity is not chat identity.
+**v0.5 experimental prerelease; see the validation report for tested behavior.** Native adapter behavior remains subject to installed-version validation. The default runtime is local MCP stdio using an existing Node runtime. Compatible runtime connections share one private SQLite database. The database is the coordination authority; process identity is not chat identity.
 
 ```mermaid
 flowchart LR

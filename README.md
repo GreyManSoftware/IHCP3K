@@ -2,7 +2,7 @@
 
 **Inter-Harness Communication Protocol 3000** lets AI sessions exchange durable requests and results across harnesses. Sessions can talk directly; a PA is optional.
 
-**v0.5 candidate — implemented and locally tested; not published or cut over live.** Native harness validation remains limited. See [validation](docs/validation.md).
+**v0.5 experimental prerelease.** Local installation and a Claude–Codex round trip have been tested. Native harness coverage remains limited. See [validation](docs/validation.md).
 
 The default is local MCP over stdio, using an existing compatible Node runtime and one shared SQLite database in a private folder you choose. Docker builds the bundles; it is not required to run an already-built local installation. The optional Docker/HTTP deployment retains the existing v0.4 capabilities.
 
@@ -20,7 +20,7 @@ flowchart LR
 
 Runtime connections are not assumed to map one-to-one to chats. Each endpoint needs an explicit credential and native binding. A doorbell signals pending mail; it does not prove the recipient read or completed it.
 
-## What the candidate adds
+## What v0.5 adds
 
 - Correlated requests and replies with explicit return endpoints and status.
 - Multiple stdio connections sharing durable mail, claims and directory state.
@@ -33,7 +33,9 @@ Plain prompts stay in the current session. IHCP3K does not silently route work, 
 
 Give your assistant [AGENT_SETUP.md](AGENT_SETUP.md) and the [harness-interop skill](skills/harness-interop/SKILL.md). **First install must ask where to put private runtime state before writing it.** Setup also records native bindings, model evidence, permissions and worker retention. Native configuration is prepared for explicit setup, never silently installed.
 
-For a source checkout, use existing Node 24.15+ and Docker to build the bundles:
+For a fresh install, use the prebuilt ZIP on [the v0.5.0 release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v0.5.0) and the agent guide above. It needs existing Node 24.15+, but no Docker at runtime.
+
+For a source checkout without prebuilt bundles, Docker builds them:
 
 ```sh
 node scripts/dev.mjs prepare

@@ -1,6 +1,6 @@
 # First-time setup and session roles
 
-**v0.5 candidate; no publication or live cutover.** Use the [shared skill](../skills/harness-interop/SKILL.md) and [onboarding guide](onboarding.md). Respect current native execution restrictions and record actual failures; do not infer a universal restriction from an earlier deployment batch.
+**v0.5 experimental prerelease.** Use the [shared skill](../skills/harness-interop/SKILL.md) and [onboarding guide](onboarding.md). Respect current native execution restrictions and record actual failures; do not infer a universal restriction from an earlier deployment batch.
 
 1. Ask the user for the private state folder before writing anything. Record the chosen working folder for throwaway nudges separately; the target retains its own registered cwd. Use existing compatible Node, local MCP stdio and shared SQLite. Docker builds source bundles; the optional HTTP path is v0.4 compatibility only.
 2. Record actual harness/engine versions, host/server and exact native binding, selectable models/access evidence, effective privileges and supported retention choice. Unknown capabilities remain unknown. No inference is needed to inspect interfaces.

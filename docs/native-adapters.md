@@ -1,6 +1,6 @@
 # Native adapters and retention
 
-**v0.5 candidate; installed-version behavior remains validation-pending.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
+**v0.5 experimental prerelease; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
 
 A request to an existing session and a new worker are different operations. `chat` sends durable mail; the configured adapter nudges the existing target. `worker` explicitly creates a separately owned session to do a bounded task. Delivery failure must not silently substitute a worker or resumed session.
 

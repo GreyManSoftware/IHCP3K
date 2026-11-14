@@ -1,6 +1,6 @@
 # Explicit live cutover and recovery
 
-**v0.5 remains an unpublished candidate; no live cutover has occurred.** Native setup is an explicit operation; any actual execution denial must be respected without assuming it applies to unrelated setup paths. This checklist describes the required transition, not authorization to perform it or bypass a denial.
+**v0.5 experimental prerelease.** This is a migration checklist, not an installation prerequisite. Native setup is an explicit operation; any actual execution denial must be respected without assuming it applies to unrelated setup paths. This checklist describes the required transition, not authorization to perform it or bypass a denial.
 
 One coordinator owns the transition. Keep all identities, credentials, messages and evidence private. Multiple compatible stdio connections may share one database; an older exclusive HTTP writer or an independent second live database must not share its authority.
 
