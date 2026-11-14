@@ -26,6 +26,8 @@ Completed, rejected and blocked receipts become completed tombstones with no bod
 
 The importer accepts at most 10,000 records, source records up to 1 MiB and normalized message bodies up to 65,536 bytes. Reject and investigate larger records rather than truncating history silently.
 
+Some older consumers recorded handled filenames in a `.processed` list instead of hash-bound receipts. This importer does not yet accept that format. Preserve and hash the list with the source snapshot, obtain the owning consumer's reconciliation, and add an explicitly tested migration path before cutover. Do not invent historical hash receipts, discard the list or replay already-handled work.
+
 Keep the original snapshot private. Its exact bytes matter. A cutover coordinator must freeze old writers and consumers, compare counts/hashes, review uncertain records and change the sender route once. The importer does not itself stop other processes or switch a caller's transport.
 
 If cutover fails, keep the new database intact. Reconcile messages and effects created since the barrier before reverting any routing; never blindly restore an old snapshot or auto-fallback to file delivery.

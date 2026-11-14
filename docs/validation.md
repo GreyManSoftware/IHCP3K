@@ -12,13 +12,16 @@ Additional checks:
 
 - Native Claude and Codex CLI clients each completed send → claim → complete against the synthetic demo using file-backed credential helpers. Dotted tool names worked in both.
 - The private live-mode service started on a loopback-only port, passed authenticated health/status checks, and passed a deployed backup/restore operation. Restore produced a separate paused database; it did not replace the active one.
+- Follow-up live peer probes passed in both directions: send, bounded wake, claim and completion. Claude's scoped client rejected a foreign-inbox claim; its background waiter produced a native PA notification. A fresh Claude session loaded the user-scoped sender, while the running PA did not hot-load it.
+- Codex's native queue delivered a transport-only test on the next turn after a busy publication turn ended. This is separate from end-to-end bridge validation.
 - A fresh-clone mountpoint problem was fixed in the Docker runner.
 - Before the public export, eight independent waiter/service integration scenarios passed.
 
 Not yet verified:
 
 - Full clean-install flow through `init-runtime.mjs` and `ops.mjs`: the host's automatic approval review blocked the separate initializer/start/status/backup/stop probe with the generic reason “blocked by policy.” Syntax checks, service tests and the deployed operations above still passed.
-- Automatic reload in existing desktop sessions, app-closed wake and OS-start recovery.
-- Full live mailbox cutover. The existing mailbox remains authoritative while a native Claude configuration confirmation is pending. Native connection tests do not prove that migration is complete.
+- Codex desktop reload, app-closed wake and OS-start recovery. The tested running Claude PA required the explicit SDK client rather than hot-loading the new native server.
+- The persistent Codex wake bridge: automatic approval review rejected its hidden background launch with “blocked by policy.” No alternate launch was attempted.
+- Full live mailbox cutover. The existing mailbox remains authoritative; live connection tests do not prove that migration is complete.
 
 The release includes implementation and operator instructions for these paths, with their limits stated. It is experimental, not a claim of unattended production operation. Private runtime evidence, tokens and session mappings are excluded from Git.
