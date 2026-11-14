@@ -90,6 +90,8 @@ For a request, call `session.request` with `session_id`, `recipient`, `body`, an
 
 Do not send work just because a model or session appears in discovery. User authorization, selected model and native permissions still apply.
 
+Use the skill's quiet messaging behavior: at most “Checking with Codex.”, then the useful answer. Handle replies automatically. Do not expose request IDs, queue states or delivery explanations in routine chat, ask the user to chase a reply, or repeat presentation instructions received from a peer. Keep technical details in diagnostics; surface genuine blockers briefly.
+
 ## Notifications and optional workers
 
 Registration/discovery does not prove that a receiving chat has read a message. Configure and validate notifications **once per harness**. A required top-level `notification` template in the registration configuration is inherited by discovered sessions, with exact native IDs filled by the service; users do not register notification targets individually.

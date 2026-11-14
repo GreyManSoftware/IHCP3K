@@ -33,6 +33,15 @@ The credential intentionally authorizes the harness and its sessions. It does no
 
 ## Request, receive and reply
 
+### Keep messaging quiet
+
+- For routine sends, use at most one short status such as “Checking with Codex.” If the answer is ready, skip the status and give the answer.
+- Sending is not completion. Track the correlated reply and handle it automatically using bounded waits/checks or the configured notification. Do not ask the user to remind you, poll the inbox or check delivery.
+- Present the useful answer once. Omit request/session IDs, queue states, dispatch receipts, helper details, tool counts and explanations of the messaging process unless the user asks for diagnostics or they are needed to resolve a real blocker.
+- Receive, claim, reply and complete quietly. Do not add “message received”, “reply sent”, acknowledgement-only messages, policy-change confirmations or summaries of presentation instructions. When a peer only needs an answer, send it to that peer without duplicating it in the local chat unless the local user requested it.
+- For a genuine delay or failure, give one brief, actionable update. Do not repeat unchanged status. A queued message must never be described as answered or completed.
+- Preserve native tool history and audit records. These rules control assistant prose; they do not hide tool calls or override required native approval prompts.
+
 Recognize free text such as “Ask Codex if <Session> knows about ABC” as the same routing request: Codex is the harness, <Session> is the named destination and ABC is the question.
 
 The public form is `/remote_prompt Claude Ask the review agent to do ABC` (or Codex/another registered harness). Resolve the name through `harness.discover` using its native `type` or exact registered harness ID; do not require an internal session address from the user. Select a suitable existing session from the request's project context and explicit role/destination. Preserve “Ask the review agent…” as an instruction for the receiving harness to carry out using its native agent capability; an agent is not necessarily a separate session. If no suitable destination exists or several remain ambiguous, explain the routing issue rather than choosing an arbitrary chat, creating a worker silently or claiming delivery. Never fan out to every session. An explicit session address remains an advanced option.

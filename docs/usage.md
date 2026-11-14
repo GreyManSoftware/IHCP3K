@@ -93,4 +93,4 @@ Include the actual material to review in the request, or an explicitly accessibl
 
 The skill gets the source session ID from reliable native context and matches it to discovery. If unavailable, it asks the user to identify their source chat; this does not register the chat. Every mail/worker input includes that `session_id`.
 
-The command returns a request ID, not an immediate answer. Use `status`, `check` and the reply workflow in [onboarding](onboarding.md). Leading `/` is accepted for CLI mode names too, but the conversational `<session> <request>` shorthand is not CLI syntax: the CLI uses private directory and JSON-file paths.
+The CLI returns a request ID, not an immediate answer. Agents use `status`, `check` and the reply workflow in [onboarding](onboarding.md) to handle the answer automatically. In conversation, show at most a brief “Checking with Codex.” followed by the useful answer; request IDs and delivery states belong in diagnostics, and users should not have to chase replies. Leading `/` is accepted for CLI mode names too, but the conversational `<session> <request>` shorthand is not CLI syntax: the CLI uses private directory and JSON-file paths.
