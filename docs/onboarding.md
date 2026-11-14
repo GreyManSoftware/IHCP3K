@@ -1,6 +1,6 @@
 # Install, register and discover
 
-**v0.5 candidate; native validation and live cutover pending.** The shared [harness-interop skill](../skills/harness-interop/SKILL.md) uses the commands below. Mode names are not universally installed slash commands. Existing live/native-configuration policy blocks remain in force.
+**v0.5 candidate; native validation and live cutover pending.** The shared [harness-interop skill](../skills/harness-interop/SKILL.md) uses the commands below. Mode names are not universally installed slash commands. Respect current native execution restrictions and record actual failures; do not infer a universal restriction from an earlier deployment batch.
 
 ## Choose the folder first
 
@@ -79,6 +79,8 @@ Discovery returns permitted active endpoints with source, age and staleness. Pre
 ## Prepare native setup and notifications
 
 Emit the scoped native snippet described in [AGENT_SETUP.md](../AGENT_SETUP.md) for explicit setup. Do not install it automatically or treat file generation as a loaded connection. Verify transport, tools, native permission scope and endpoint identity under the installed harness version.
+
+Use the [harness-specific setup checks](native-setup.md) for scope and first-use approval. A fixed receiving token in global configuration is shared by every session loading that configuration.
 
 Configure trusted `runtime.notifications` separately, keyed by endpoint with `endpoint_revision`, using the [adapter contract](native-adapters.md). The private directory binding/profile is evidence, not executable configuration. A runtime checks configured mail without AI polling; an appropriate native adapter handles the doorbell. A short CLI call does not leave a notifier running after it exits. A persistent native MCP connection or another explicitly owned active runtime is needed for ongoing delivery.
 

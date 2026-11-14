@@ -1,6 +1,6 @@
 # Agent setup and operation
 
-This guide describes the **v0.5 candidate**, not a published release or completed live cutover. Implementation has resumed after research; validation remains pending. Existing live-cutover and native-configuration changes remain policy-blocked. Preparing candidate files does not lift those restrictions or authorize a bypass.
+This guide describes the **v0.5 candidate**, not a published release or completed live cutover. Implementation has resumed after research; validation remains pending. Native setup and cutover require explicit scope and installed-version validation. A historical rejection of a deployment batch is not evidence that every installation path is blocked; never bypass an actual denial.
 
 ## First install: ask before writing
 
@@ -39,6 +39,8 @@ The optional [Docker/HTTP deployment](docs/http-v04.md) retains the existing v0.
 Issue an operator-scoped, one-use enrolment for an exact endpoint and permitted peers. Register with the chosen runtime, private native binding and attributed profile; store separate session and wake credentials. Each receiving session uses its own session credential. See [onboarding](docs/onboarding.md) for commands and retry behavior.
 
 Emit a native configuration snippet for the user's explicit setup step. Do not write native configuration, broaden permissions, restart an app or create a management chat as an installation side effect. Preserve unrelated native settings and record the scope/name of any entry the user explicitly chooses to install. A saved entry is not proof that a running session loaded it.
+
+Follow the [native setup checks](docs/native-setup.md). Never put a session's receiving token in a user-global entry and claim other sessions remain isolated. First-use tool approval is separate from filesystem access; prove it under the installed harness rather than requiring a blanket permission bypass.
 
 The stdio launch contract is:
 

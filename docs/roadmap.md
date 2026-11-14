@@ -2,7 +2,7 @@
 
 ## v0.5 candidate
 
-Implementation resumed after research. The candidate is **not published or cut over live**; existing live/native-configuration policy blocks remain. See [validation](validation.md) for reported checks and remaining evidence gaps.
+Implementation resumed after research. The candidate is **not published or cut over live**; native setup and cutover still require installed-version validation. See [validation](validation.md) for reported checks and remaining evidence gaps.
 
 The candidate adds local MCP stdio on an existing Node runtime, a shared SQLite schema, idempotent private installation, explicit correlated requests/replies, trusted native notifications and bounded worker jobs/results. It retains the directory and scoped credentials. The optional Docker/HTTP deployment remains v0.4 compatibility mode, without the new stdio request/worker APIs.
 

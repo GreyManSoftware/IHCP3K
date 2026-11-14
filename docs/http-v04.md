@@ -2,7 +2,7 @@
 
 This is the **versioned compatibility path**, not the v0.5 default. It retains the existing mail, attendance, directory, backup/restore and explicit wake-bridge capabilities. The current HTTP entrypoint uses the older exclusive-owner store; new correlated request and worker APIs belong to local stdio. A shared version string does not make their capabilities identical.
 
-For the default candidate installation, read [onboarding](onboarding.md). Never run HTTP and stdio against the same live database or accept normal traffic into two authorities for the same installation. Existing live/native-configuration policy blocks remain in force.
+For the default candidate installation, read [onboarding](onboarding.md). Never run HTTP and stdio against the same live database or accept normal traffic into two authorities for the same installation. Respect current native execution restrictions and record actual failures; do not infer a universal restriction from an earlier deployment batch.
 
 ## Install and roles
 

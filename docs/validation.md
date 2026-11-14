@@ -2,7 +2,7 @@
 
 ## v0.5 candidate — not published or live
 
-This candidate has not been published or cut over live. Existing live-cutover/native-configuration changes remain policy-blocked. No configuration workaround or clean end-to-end native installation is implied by local tests.
+This candidate has not been published or cut over live. Native tests below distinguish working transport from unresolved client approval and notification behavior. No clean end-to-end native installation is implied by local tests.
 
 Validation completed on 14 November 2026 against the candidate source and freshly built bundles:
 
@@ -18,9 +18,21 @@ Public-source checks found no private path/session identifiers or matches agains
 
 ## Native behavior still pending
 
+An isolated two-harness rehearsal on 14 November 2026 used the committed v0.5 bundles and a fresh Windows runtime:
+
+- Fresh installation, separate endpoint registration and reciprocal discovery passed.
+- Both PAs exchanged correlated requests/replies through scoped SDK stdio clients; both replies were matched and completed.
+- Claude reported successful native stdio directory discovery and mailbox inspection in a no-persist CLI invocation with a private MCP configuration. Persistent native configuration was not changed.
+- Codex CLI `0.167.0-alpha.4.1` loaded the MCP tools but refused discovery/status under headless approval policy `never`. A user-approved retry with a two-tool allow list and per-tool approval overrides returned the same error. The reason those overrides were ineffective remains unresolved.
+- The subsequent interactive Codex test **passed**: the user approved the two inspection tools separately in the native terminal, and both returned actual MCP results. The directory contained both proof endpoints; mailbox status showed two completed messages. The PA verified the terminal output. This validates native loading and inspection, not unattended headless grants or approval of message-writing/worker tools.
+- The exact restricted Claude nudge command then passed from the chosen working folder with no permission denials and observed child exit; the recipient independently confirmed delivery. Matching an inaccessible desktop UUID first stopped safely; the verified native listing reference succeeded.
+- Both notification adapters were then enabled only on the isolated runtime. A new correlated request automatically nudged Claude, which claimed and replied. Its reply returned a successful Codex queue acknowledgement; the Codex PA claimed and completed the correlated reply. Queue acknowledgement does not establish when the doorbell surfaces in a busy or unloaded native chat.
+
+See [native setup](native-setup.md) for the tested scope and first-use approval procedure. The existing mailbox stayed live; this rehearsal did not migrate or delete production state.
+
 New native adapter execution is fixture/mock-tested beyond the earlier peer evidence. No current end-to-end claim is made for:
 
-- Claude's combined no-persist plus `ListAgents`/`SendMessage` configuration on the actual CLI and Desktop engines; idle/busy/unavailable or duplicate-name targets.
+- Claude delivery across idle/busy/unavailable or duplicate-name targets beyond the single verified target and exact-ref rehearsal above.
 - Codex queue delivery on the owning server across idle/busy/unloaded states; warning handling is distinct from target consumption.
 - Native worker result parsing, cancellation, child exit, ambient MCP/hook restrictions and descendant/remote-task ownership on the installed versions.
 - Codex archive/delete effects, exact worker identity, acknowledgement gating and delayed cleanup after restart. Command presence is not proof of erasure.
@@ -32,7 +44,7 @@ Acceptance should exercise harmless owned targets, permission denial, duplicate/
 
 ## Historical v0.4 Docker/HTTP evidence
 
-The previous candidate recorded **58 tests**: 28 service, 16 waiter, one native queue and 13 legacy tests. A packaged-container rehearsal covered fresh install/reuse, occupied-port rejection, three synthetic registrations, discovery, direct mail, completion and unlink; backup/restore was also exercised. The real two-harness reinstall was incomplete. These counts and results do not validate v0.5 or lift current policy blocks.
+The previous candidate recorded **58 tests**: 28 service, 16 waiter, one native queue and 13 legacy tests. A packaged-container rehearsal covered fresh install/reuse, occupied-port rejection, three synthetic registrations, discovery, direct mail, completion and unlink; backup/restore was also exercised. The real two-harness reinstall was incomplete. These counts and results do not validate v0.5 or establish current native setup permissions.
 
 ## Historical v0.3 Docker/HTTP evidence
 

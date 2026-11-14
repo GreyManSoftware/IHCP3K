@@ -2,7 +2,7 @@
 
 ## v0.5 local candidate from an offline backup
 
-This is an explicit offline operation, separate from normal installation and live cutover. The candidate is not published or live. Existing live/native-configuration policy blocks still apply. Do not start an older HTTP owner alongside new stdio writers or let two databases accept normal traffic as the same authority.
+This is an explicit offline operation, separate from normal installation and live cutover. The candidate is not published or live. Respect actual native execution restrictions throughout the migration. Do not start an older HTTP owner alongside new stdio writers or let two databases accept normal traffic as the same authority.
 
 1. Agree a single migration owner and barrier; stop every source writer/consumer, including old HTTP and any stdio connections. Record the source version and consistent backup identity privately.
 2. Obtain a verified SQLite snapshot/backup including committed WAL data and its SHA-256. Copying only a running `.db` file is not a consistent backup. Preserve the source and evidence unchanged.

@@ -46,6 +46,8 @@ Claude uses `type:"claude-message"`, `verified:true`, `target:{"stable_id":"<ver
 
 The notification prompt requests only an exact-target doorbell. Missing/ambiguous targets stop delivery; display-name matches are insufficient. It must not perform the recipient's task, start a replacement chat or change the recipient's cwd.
 
+Use an identifier the installed native listing actually exposes. In the Windows rehearsal, `ListAgents` exposed a short bracketed session reference, not the desktop's internal session UUID. The UUID attempt correctly stopped without sending; an independently verified exact reference succeeded with the full restricted flags. Record that reference's owning host and current session binding, and revalidate on relink. A title alone is not a substitute, and a reference is not guaranteed portable across hosts or future sessions.
+
 If every runtime is closed, no timer runs. Short CLI calls do not leave a notification process behind. Missing native access leaves durable mail pending for an explicit manual check; uncertain dispatch needs reconciliation before reset. No implicit scheduler, background service, UI automation or PA relay is required.
 
 ## Task workers
