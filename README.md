@@ -70,13 +70,12 @@ Either session can send a request. The answer returns to the original conversati
 
 ```mermaid
 flowchart LR
-  C["Claude session"] -->|"Please review this code"| I["IHCP3K"]
-  I -->|"Review request"| X["Codex session"]
-  X -->|"Review findings"| I
-  I -->|"Here's the review"| C
+  C["Claude session"] <-->|"Requests and replies<br/>through MCP tools"| I["IHCP3K"]
+  I <-->|"Requests and replies<br/>through MCP tools"| X["Codex session"]
+  I <--> DB[("Shared SQLite database<br/>Messages and session directory")]
 ```
 
-Messages are stored locally. Configured notifications alert the receiving session; if every runtime is closed, messages wait until one starts again.
+MCP (Model Context Protocol) exposes IHCP3K tools to each assistant. SQLite stores messages in a private local file, without a separate database server. Configured notifications alert the receiving session; if every runtime is closed, messages wait until one starts again.
 
 **Version 1.0.0.** A Claude–Codex round trip has been tested. Copilot support remains experimental and hasn't been tested against an installed host. Other harnesses need compatibility checks; see [validation](docs/validation.md).
 

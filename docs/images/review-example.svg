@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="540" viewBox="0 0 1080 540" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="770" viewBox="0 0 1080 770" role="img" aria-labelledby="title desc">
 <title id="title">Ask another assistant for a review without leaving your conversation</title>
-<desc id="desc">Illustrative conversation. A user in Claude sends a remote_prompt to codex-review. Codex reviews the supplied diff and returns two findings to the original conversation.</desc>
+<desc id="desc">Illustrative conversation. A user in Claude sends a remote_prompt to codex-review. Codex reviews the supplied diff and returns two findings to the original conversation. Both sessions use local IHCP3K MCP connections that read and write one shared SQLite database.</desc>
 <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#8ea7c9" stroke-width="1.5"/></marker></defs>
-<rect width="1080" height="540" rx="20" fill="#101823"/>
+<rect width="1080" height="770" rx="20" fill="#101823"/>
 <g font-family="Segoe UI,Arial,sans-serif">
 <text x="32" y="43" fill="#edf3fc" font-size="23" font-weight="700">A second opinion, in your existing conversation</text>
 <text x="32" y="70" fill="#a8bad0" font-size="14">ILLUSTRATIVE MOCKUP · NOT AN ACTUAL APP SCREENSHOT</text>
@@ -25,4 +25,20 @@
 <text x="50" y="310" fill="#88d9c4" font-size="13">BACK IN YOUR CONVERSATION</text>
 <rect x="46" y="326" width="434" height="148" rx="10" fill="#213a38"/>
 <text x="62" y="355" fill="#eef8f4" font-size="16"><tspan x="62">Codex returned two findings about</tspan><tspan x="62" dy="26">lock cleanup and duplicate records.</tspan><tspan x="62" dy="35">No files changed.</tspan><tspan x="62" dy="26">You decide what happens next.</tspan></text>
+<line x1="32" y1="525" x2="1048" y2="525" stroke="#31445e"/>
+<text x="32" y="557" fill="#edf3fc" font-size="20" font-weight="600">Behind this exchange</text>
+<text x="32" y="581" fill="#a8bad0" font-size="14">Each session uses IHCP3K tools through MCP (Model Context Protocol).</text>
+<rect x="45" y="607" width="280" height="74" rx="12" fill="#2b4060" stroke="#526d91"/>
+<text x="185" y="637" text-anchor="middle" fill="#ffffff" font-size="17" font-weight="600">Claude's MCP connection</text>
+<text x="185" y="661" text-anchor="middle" fill="#c5d4e8" font-size="14">Local IHCP3K runtime</text>
+<rect x="755" y="607" width="280" height="74" rx="12" fill="#253b40" stroke="#4e8077"/>
+<text x="895" y="637" text-anchor="middle" fill="#ffffff" font-size="17" font-weight="600">Codex's MCP connection</text>
+<text x="895" y="661" text-anchor="middle" fill="#c5d4e8" font-size="14">Local IHCP3K runtime</text>
+<path d="M414 617 A126 16 0 0 1 666 617 V674 A126 16 0 0 1 414 674 Z" fill="#27334b" stroke="#8598be"/>
+<ellipse cx="540" cy="617" rx="126" ry="16" fill="#344461" stroke="#8598be"/>
+<text x="540" y="653" text-anchor="middle" fill="#edf3fc" font-size="17" font-weight="600">Shared SQLite database</text>
+<text x="540" y="675" text-anchor="middle" fill="#c5d4e8" font-size="13">Requests · Replies · Session directory</text>
+<path d="M335 636 H403 M403 655 H335 M677 636 H744 M744 655 H677" stroke="#8ea7c9" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+<text x="32" y="724" fill="#a8bad0" font-size="14">SQLite stores messages in a private local file; it does not need a separate database server.</text>
+<text x="32" y="747" fill="#a8bad0" font-size="14">Request/reply arrows above show the conversation; configured notifications alert the receiving session.</text>
 </g></svg>
