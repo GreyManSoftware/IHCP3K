@@ -2,6 +2,10 @@
 
 This page distinguishes automated tests from checks performed in real agent applications. A **fixture** is controlled test data or a simulated app response; a **rehearsal** exercises a specific real workflow. Neither proves compatibility with every app version. Technical terms are defined in [terminology](terminology.md).
 
+## Version 1.2.0: bounded retention
+
+The full rebuilt suite passed **124 tests** (84 service, 16 legacy waiter, 3 queue/help, 13 legacy import, 8 installer). New tests cover complete request/reply deletion without dangling links, pending and uncertain preservation, finite duplicate prevention, inactive referenced sessions, acknowledged versus uncertain worker history, capacity rejection with atomic rollback, and a real SQLite reader blocking WAL checkpointing. Targeted retention tests also passed on Windows. This release uses the harness-first public command `/remote_prompt Claude Ask the review agent to do ABC`; native routing still requires an available unambiguous destination.
+
 ## Version 1.1.1: one-question setup
 
 Setup asks only “Where do you want to install it?” The agent chooses the internal layout and native registration details. Omitting `peers` now enables reciprocal communication with existing and future registered harnesses in the same private installation; explicit existing restrictions remain enforced.

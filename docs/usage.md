@@ -10,12 +10,12 @@ Tell the assistant to use the skill, then give it a mode and the information it 
 Use harness-interop: /register Codex
 Use harness-interop: /discover sessions
 Use harness-interop: /discover models
-Use harness-interop: /remote_prompt codex-review Review this diff; do not edit files.
+Use harness-interop: /remote_prompt Claude Ask the review agent to do ABC
 Use harness-interop: /status <request-id>
 Use harness-interop: /unregister Codex
 ```
 
-`codex-review` is a placeholder for an actual permitted session returned by discovery. Each harness registers once and its sessions are discovered automatically. A session can ask another session directly; no special management chat is needed. Model listings include their source and age, and do not prove that the model or allowance is still available.
+`Claude` names the target harness, not an internal session address. The skill discovers that harness and resolves a suitable session from project context or an explicit role in the request. Each harness registers once and its sessions are discovered automatically. A session can ask another session directly; no special management chat is needed. Model listings include their source and age, and do not prove that the model or allowance is still available.
 
 These are instructions interpreted by the skill. They do not install native slash commands or autocomplete. Where the app treats a leading `/` specially, use the full `Use harness-interop: ...` form. Plain-language requests work too.
 
@@ -29,10 +29,10 @@ Use harness-interop: /remote_prompt --help
 Use harness-interop: /unregister --help
 ```
 
-For `/remote_prompt`, help can show the actual permitted destinations from your configured connection. If no connection exists, it explains registration instead. An ambiguous session label must be resolved before sending. The syntax is:
+For `/remote_prompt`, help can show the actual permitted destinations from your configured connection. If no connection exists, it explains registration instead. If several harness instances or sessions remain equally suitable, clarify the destination rather than sending to an arbitrary chat. This is task routing, not an installation step. The syntax is:
 
 ```text
-/remote_prompt <session> <request>
+/remote_prompt <harness> <request>
 ```
 
 `/prompt`, `/chat` and `/request` remain aliases. `/unlink` is a compatibility alias for unregister; with a harness folder it disconnects the whole harness.
@@ -51,7 +51,7 @@ The skill also supports the lower-level modes below. Each must offer usage assis
 | --- | --- |
 | `register` | Register one harness, with its native discovery adapter, profile and permitted peer harnesses. No individual chat enrolment. |
 | `discover` | List permitted sessions or their advertised models. |
-| `remote_prompt` | Send a request to a named permitted session. |
+| `remote_prompt` | Send a request to a named harness; the skill resolves the destination session. |
 | `status` | Inspect a request ID, or inbox counts with `status inbox` (the skill supplies the current source ID). |
 | `unregister` | Disconnect an explicitly named harness and all its session addresses. |
 | `refresh` | Force native session discovery again. |

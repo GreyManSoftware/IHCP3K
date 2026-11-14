@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="770" viewBox="0 0 1080 770" role="img" aria-labelledby="title desc">
 <title id="title">Ask another assistant for a review without leaving your conversation</title>
-<desc id="desc">Illustrative conversation. A user in Claude sends a remote_prompt to codex-review. Codex reviews the supplied diff and returns two findings to the original conversation. Both sessions use local IHCP3K MCP connections that read and write one shared SQLite database.</desc>
+<desc id="desc">Illustrative conversation. A user in Claude sends a remote_prompt to Codex. Codex reviews the supplied diff and returns two findings to the original conversation. Both sessions use local IHCP3K MCP connections that read and write one shared SQLite database.</desc>
 <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#8ea7c9" stroke-width="1.5"/></marker></defs>
 <rect width="1080" height="770" rx="20" fill="#101823"/>
 <g font-family="Segoe UI,Arial,sans-serif">
@@ -12,7 +12,7 @@
 <circle cx="607" cy="123" r="6" fill="#88d9c4"/><text x="623" y="129" fill="#f0f4fa" font-size="18" font-weight="600">Connected Codex session</text>
 <text x="50" y="165" fill="#b7c7dc" font-size="13">YOU</text>
 <rect x="46" y="180" width="434" height="94" rx="10" fill="#2b4060"/>
-<text x="62" y="207" fill="#ffffff" font-size="16"><tspan x="62">Use harness-interop:</tspan><tspan x="62" dy="24">/remote_prompt codex-review</tspan><tspan x="62" dy="24">Review this diff. Don't change files.</tspan></text>
+<text x="62" y="207" fill="#ffffff" font-size="16"><tspan x="62">Use harness-interop:</tspan><tspan x="62" dy="24">/remote_prompt Codex</tspan><tspan x="62" dy="24">Review this diff. Don't change files.</tspan></text>
 <text x="604" y="165" fill="#b7c7dc" font-size="13">REQUEST RECEIVED</text>
 <rect x="600" y="180" width="434" height="94" rx="10" fill="#253b40"/>
 <text x="616" y="207" fill="#eef8f4" font-size="16"><tspan x="616">Review the supplied diff.</tspan><tspan x="616" dy="24">Return findings to the Claude session.</tspan><tspan x="616" dy="24">Scope: review only.</tspan></text>

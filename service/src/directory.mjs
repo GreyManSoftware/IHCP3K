@@ -31,7 +31,7 @@ export class Directory {
   authenticate(secret){
     const h=hash(secret),row=this.db.prepare('SELECT c.*,e.active FROM credentials c JOIN endpoints e ON e.id=c.endpoint WHERE c.hash=?').get(h);
     if(row && !row.revoked && row.active){
-      if(row.role==='session')this.db.prepare('UPDATE endpoints SET last_seen=? WHERE id=?').run(this.store.now(),row.endpoint);
+      if(row.role==='session')this.store.transaction(()=>this.db.prepare('UPDATE endpoints SET last_seen=? WHERE id=?').run(this.store.now(),row.endpoint));
       return {...JSON.parse(row.principal_json),directory_hash:h,endpoint:row.endpoint};
     }
     const code=this.db.prepare('SELECT * FROM enrolments WHERE hash=? AND expires>?').get(h,this.store.now());

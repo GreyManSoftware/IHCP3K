@@ -1,5 +1,6 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {ServiceError} from './store.mjs';
+import {checkAdmission,RETENTION} from './retention.mjs';
 import {runNativeWorker,cleanupNativeWorker,buildNativeCommand} from './native-adapters.mjs';
 const check=(value,code)=>{if(!value)throw new ServiceError(code);};
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -28,6 +29,7 @@ export class WorkerManager {
      this.store.scope(p,'claim',endpoint);check(!this.store.paused(endpoint),'PAUSED');
      const old=this.db.prepare('SELECT * FROM workers WHERE owner=? AND dedup_key=?').get(p.id,idempotency_key);
      if(old){check(old.input_hash===fingerprint,'IDEMPOTENCY_CONFLICT');return {id:old.id,state:old.state,duplicate:true};}
+     checkAdmission(this.store,'workers',RETENTION.maxWorkers);
      check(this.db.prepare("SELECT count(*) n FROM workers WHERE state='running'").get().n<8,'WORKER_CAPACITY_REACHED');
      const id=randomUUID(),at=this.store.now();
      this.db.prepare("INSERT INTO workers(id,owner,endpoint,adapter,dedup_key,input_hash,config_hash,state,created_at,deadline,cleanup_action,cleanup_after,cleanup_state) VALUES(?,?,?,?,?,?,?,'running',?,?,?,?, 'pending')").run(id,p.id,endpoint,adapter,idempotency_key,fingerprint,hash(config),at,at+timeout+30000,retention.action,retention.hours*3600000);
@@ -78,7 +80,7 @@ export class WorkerManager {
          else {const cleaned=await this.cleanup(config,{native_session_id:result.native_session_id,action:row.cleanup_action,signal:this.maintenanceAbort.signal});outcome=cleaned.status;}
        }
      }catch{}
-     this.db.prepare('UPDATE workers SET cleanup_state=? WHERE id=?').run(outcome,row.id);
+     this.store.transaction(()=>this.db.prepare('UPDATE workers SET cleanup_state=? WHERE id=?').run(outcome,row.id));
    }
  }
  async stop(){this.stopping=true;this.maintenanceAbort.abort();const active=[...this.active.values()];for(const {abort} of active)abort.abort();await Promise.allSettled([...active.map(x=>x.task),this.maintenance]);}

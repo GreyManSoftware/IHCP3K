@@ -54,11 +54,11 @@ Register each harness once. Registration connects it reciprocally with the other
 | --- | --- | --- |
 | `/register` | Connect a harness once. | `/register Codex` |
 | `/discover` | List connected sessions or models. | `/discover models` |
-| `/remote_prompt` | Send a request to another session. | `/remote_prompt codex-review Review this diff` |
+| `/remote_prompt` | Send a request to another session. | `/remote_prompt Claude Ask the review agent to do ABC` |
 | `/status` | Check a request's progress. | `/status <request-id>` |
 | `/unregister` | Disconnect a harness. | `/unregister Codex` |
 
-Use a destination returned by `/discover`; `codex-review` is just an example. Unregistering a harness revokes its credential and all discovered session addresses; the skill also removes its IHCP3K connection settings. Other harnesses and shared data remain.
+Name the harness you want to use; `Claude` names the harness; the skill resolves a suitable session using the request and project context. Unregistering a harness revokes its credential and all discovered session addresses; the skill also removes its IHCP3K connection settings. Other harnesses and shared data remain.
 
 **Need help?** Use any mode on its own or add `--help`. The skill explains the arguments and shows examples before acting. `/remote_prompt` can also list available destinations. `/prompt` and `/chat` remain aliases.
 
@@ -67,10 +67,10 @@ These are skill instructions, **not universal native slash commands or typing-bo
 ```text
 Use harness-interop: /remote_prompt --help
 Use harness-interop: /discover sessions
-Use harness-interop: /remote_prompt codex-review Review the current diff
+/remote_prompt Claude Ask the review agent to do ABC
 ```
 
-See [all modes and terminal usage](docs/usage.md) for more.
+The primary form is `/remote_prompt <harness> <request>`. If the app intercepts slash commands, prefix it with `Use harness-interop:`. The agent handles internal session addresses. See [all modes and terminal usage](docs/usage.md) for more.
 
 ## How it connects
 
@@ -83,9 +83,9 @@ flowchart LR
   I <--> DB[("Shared SQLite database<br/>Messages and session directory")]
 ```
 
-MCP (Model Context Protocol) exposes IHCP3K tools to each assistant. SQLite stores messages in a private local file, without a separate database server. Configured notifications alert the receiving session; if every runtime is closed, messages wait until one starts again.
+MCP (Model Context Protocol) exposes IHCP3K tools to each assistant. SQLite stores messages in a private local file, without a separate database server. [Automatic cleanup](docs/retention.md) expires completed history and enforces capacity limits without AI calls. Configured notifications alert the receiving session; if every runtime is closed, messages wait until one starts again.
 
-**Version 1.1.1.** A Claude–Codex round trip was tested with the previous registration flow. The new harness-wide flow has automated coverage and verified native discovery; a fresh native install and delivery test remains. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md).
+**Version 1.2.0.** A Claude–Codex round trip was tested with the previous registration flow. The new harness-wide flow has automated coverage and verified native discovery; a fresh native install and delivery test remains. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md).
 
 [Download](https://github.com/GreyManSoftware/IHCP3K/releases) · [Agent setup](AGENT_SETUP.md) · [Architecture](docs/architecture.md) · [Technical terms](docs/terminology.md)
 

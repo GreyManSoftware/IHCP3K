@@ -1,5 +1,6 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {ServiceError} from './store.mjs';
+import {checkAdmission,RETENTION} from './retention.mjs';
 import {discoverSessions,validateDiscovery} from './session-discovery.mjs';
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const check=(v,c)=>{if(!v)throw new ServiceError(c);};
@@ -26,6 +27,7 @@ export class HarnessRegistry{
    const old=this.db.prepare('SELECT * FROM harnesses WHERE id=?').get(harness);
    check(!this.db.prepare('SELECT 1 FROM harnesses WHERE token_hash=? AND id!=?').get(hash(credential),harness),'CREDENTIAL_ALREADY_USED');
    check(old?.active||this.db.prepare('SELECT count(*) n FROM harnesses WHERE active=1').get().n<16,'HARNESS_LIMIT');
+   if(!old)checkAdmission(this.store,'harnesses',RETENTION.maxHarnesses);
    const fields=[hash(credential),JSON.stringify(config),JSON.stringify(profile),JSON.stringify(peers)];
    if(old?.active){check(old.token_hash===fields[0]&&old.config_json===fields[1]&&old.profile_json===fields[2]&&old.peers_json===fields[3],'HARNESS_ALREADY_REGISTERED');return {harness,revision:old.revision,registered:true,reused:true};}
    check(!old||old.token_hash!==fields[0],'FRESH_HARNESS_CREDENTIAL_REQUIRED');
@@ -65,6 +67,7 @@ export class HarnessRegistry{
      for(const s of rows){
       const endpoint=sessionAddress(harness,s.native_id);seen.add(endpoint);
       const previous=this.db.prepare('SELECT harness FROM endpoints WHERE id=?').get(endpoint);check(!previous||previous.harness===harness,'SESSION_ID_COLLISION');
+      if(!previous)checkAdmission(this.store,'endpoints',RETENTION.maxEndpoints);
       const binding=JSON.stringify({native_session_id:s.native_id,harness,discovered:true});
       this.db.prepare('INSERT INTO endpoints VALUES(?,?,1,1,?,?,?) ON CONFLICT(id) DO UPDATE SET active=1,profile_json=excluded.profile_json,binding_json=excluded.binding_json,last_seen=excluded.last_seen').run(endpoint,harness,row.profile_json,binding,now);
       this.db.prepare('INSERT INTO harness_sessions VALUES(?,?,?,?,?,?,?) ON CONFLICT(endpoint) DO UPDATE SET label=excluded.label,cwd=excluded.cwd,state=excluded.state,seen_at=excluded.seen_at').run(endpoint,harness,s.native_id,s.label.slice(0,200),s.cwd??null,s.state,now);
@@ -74,9 +77,9 @@ export class HarnessRegistry{
      this.db.prepare('UPDATE harnesses SET last_scan=?,last_error=NULL WHERE id=?').run(now,harness);
     });
    }catch(e){
-    this.db.prepare('UPDATE harnesses SET last_error=? WHERE id=? AND revision=? AND active=1 AND EXISTS(SELECT 1 FROM harness_scans WHERE harness=? AND token=?)').run(e.code??'DISCOVERY_FAILED',harness,row.revision,harness,scanToken);throw e;
+    this.store.transaction(()=>this.db.prepare('UPDATE harnesses SET last_error=? WHERE id=? AND revision=? AND active=1 AND EXISTS(SELECT 1 FROM harness_scans WHERE harness=? AND token=?)').run(e.code??'DISCOVERY_FAILED',harness,row.revision,harness,scanToken));throw e;
    }
-  })();this.inflight.set(harness,task);try{return await task;}finally{this.inflight.delete(harness);this.db.prepare('DELETE FROM harness_scans WHERE harness=? AND token=?').run(harness,scanToken);}
+  })();this.inflight.set(harness,task);try{return await task;}finally{this.inflight.delete(harness);try{this.store.transaction(()=>this.db.prepare('DELETE FROM harness_scans WHERE harness=? AND token=?').run(harness,scanToken));}catch{/* Expired leases are collected on the next maintenance pass. */}}
  }
  permitted(p){const own=this.row(p),peers=JSON.parse(own.peers_json);return this.db.prepare('SELECT * FROM harnesses WHERE active=1 ORDER BY id').all().filter(r=>r.id===own.id||(peers.includes('*')||peers.includes(r.id))&&(JSON.parse(r.peers_json).includes('*')||JSON.parse(r.peers_json).includes(own.id)));}
  async discover(p,{force=false}={},signal){
@@ -87,7 +90,7 @@ export class HarnessRegistry{
   this.row(p);
   for(const r of this.permitted(p)){
    const current=this.db.prepare('SELECT * FROM harnesses WHERE id=?').get(r.id);
-   observations.push({harness:r.id,profile:JSON.parse(r.profile_json),last_scan:current.last_scan?new Date(current.last_scan).toISOString():null,error:current.last_error,stale:!!current.last_error||current.last_scan===null||this.store.now()-current.last_scan>30000,
+   observations.push({harness:r.id,type:JSON.parse(r.config_json).type,profile:JSON.parse(r.profile_json),last_scan:current.last_scan?new Date(current.last_scan).toISOString():null,error:current.last_error,stale:!!current.last_error||current.last_scan===null||this.store.now()-current.last_scan>30000,
     sessions:this.db.prepare('SELECT s.endpoint,s.native_id,s.label,s.cwd,s.state FROM harness_sessions s JOIN endpoints e ON e.id=s.endpoint WHERE s.harness=? AND e.active=1 ORDER BY s.label,s.endpoint').all(r.id)});
   }
   return {harnesses:observations};

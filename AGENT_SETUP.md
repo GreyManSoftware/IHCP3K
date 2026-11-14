@@ -1,6 +1,6 @@
 # Agent setup and operation
 
-Install **IHCP3K 1.1.1** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
+Install **IHCP3K 1.2.0** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
 
 ## First install
 
@@ -9,7 +9,7 @@ Ask exactly one setup question: **“Where do you want to install it?”** If th
 The agent handles the rest:
 
 1. Record that folder as `<install-root>`. Store the extracted release under `app/`, private runtime data under `data/`, and harness credentials under `data/harnesses/<harness-id>/`. Create needed parent folders; let the installer create and protect `data/`. Keep private data out of Git and shared/public folders.
-2. Download `IHCP3K-1.1.1.zip` and its `.sha256` file from [the release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v1.1.1), verify the hash and extract the package contents into `app/`. Use the included guide and [skill](skills/harness-interop/SKILL.md).
+2. Download `IHCP3K-1.2.0.zip` and its `.sha256` file from [the release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v1.2.0), verify the hash and extract the package contents into `app/`. Use the included guide and [skill](skills/harness-interop/SKILL.md).
 3. Use existing Node 24.15+ (SQLite 3.51.3+). Respect the user's software-installation policy if it is missing. The prebuilt package needs no npm install or Docker at runtime.
 4. Run the following from `app/`, replacing the placeholder with the selected absolute path. The helper working directory defaults to `data/`; no separate question or `--workdir` is needed.
 
@@ -109,3 +109,7 @@ Before calling setup complete, test: register once; discover multiple sessions; 
 Keep one user-chosen shared source for skills/agent definitions and project-scoped memory. IHCP3K does not copy chat history or merge memories. A handover requires a checkpoint, source stop and destination acceptance.
 
 For an unknown harness, implement and test a bounded read-only session-discovery adapter first, including stable IDs, pagination, disappearance, failure handling and account/host scope. Then validate native MCP configuration, source-session identity, notification and permissions. Do not promise support based solely on an advertised MCP interface or silently fall back to manual session enrolment.
+
+## Automatic retention
+
+Cleanup is enabled by default; do not ask another setup question or create an AI routine. See [retention](docs/retention.md) for the 90-day completed history, 30-day inactive session policy and storage limits.

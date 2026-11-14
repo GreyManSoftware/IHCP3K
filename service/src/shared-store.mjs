@@ -4,6 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {Store,ServiceError} from './store.mjs';
 import {Directory} from './directory.mjs';
 import {HarnessRegistry} from './harness-registry.mjs';
+import {storageSetup,pruneHistory,checkpoint} from './retention.mjs';
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const check=(v,c)=>{if(!v)throw new ServiceError(c);};
 
@@ -22,6 +23,7 @@ export class SharedStore extends Store {
    try{super(filename,{...options,shared:true});}
    catch(e){guard?.close();throw e;}
    try {
+    storageSetup(this);
     this.directory=new Directory(this);
     this.harnesses=new HarnessRegistry(this);
     this.transaction(()=>{
@@ -38,7 +40,7 @@ export class SharedStore extends Store {
        check(/^[a-z_]+$/.test(name),'INVALID_SCHEMA');
        for(const op of ['INSERT','UPDATE','DELETE'])this.db.exec(`CREATE TRIGGER IF NOT EXISTS fence_${name}_${op} BEFORE ${op} ON ${name} BEGIN SELECT CASE WHEN ihcp_writer_version() != CAST((SELECT value FROM metadata WHERE key='writer_version') AS INTEGER) THEN RAISE(ABORT,'WRITER_VERSION_MISMATCH') END; END;`);
      }
-     this.db.exec('PRAGMA user_version=6;');
+     this.db.exec(`CREATE INDEX IF NOT EXISTS completed_history ON messages(state,completed_at); CREATE INDEX IF NOT EXISTS inactive_sessions ON endpoints(active,last_seen); PRAGMA user_version=6;`);
     });
    } catch(e) {this.close();throw e;} finally {guard?.close();}
  }
@@ -108,7 +110,7 @@ export class SharedStore extends Store {
  waiterLastSeen(recipient){const row=this.db.prepare('SELECT value FROM metadata WHERE key=?').get('waiter_last_seen:'+recipient);return row?Number(row.value):null;}
  maintain(){
    // Acquire a short lease in its own atomic transaction. A crash can delay, not duplicate, the next pass.
-   return this.transaction(()=>{
+   const result=this.transaction(()=>{
      const row=this.db.prepare('SELECT * FROM maintenance_lease WHERE id=1').get();
      if(row&&row.until_ms>this.now())return {skipped:true};
      this.db.prepare('INSERT OR REPLACE INTO maintenance_lease VALUES(1,?,?)').run(this.instanceId,this.now()+60000);
@@ -117,8 +119,10 @@ export class SharedStore extends Store {
      this.db.prepare('DELETE FROM wake_waiters WHERE deadline<=?').run(this.now());
      this.db.prepare("UPDATE workers SET state='uncertain' WHERE state='running' AND deadline<=?").run(this.now());
      this.db.prepare("UPDATE workers SET result_json=NULL WHERE id IN (SELECT id FROM workers WHERE acknowledged_at<? AND state NOT IN ('running','uncertain') AND cleanup_state NOT IN ('pending','reserved','uncertain') AND result_json IS NOT NULL LIMIT 100)").run(this.now()-90*86400000);
-     return result;
+     return {...result,retention:pruneHistory(this)};
    });
+   if(!result.skipped){this.db.exec('PRAGMA incremental_vacuum(256)');checkpoint(this);}
+   return result;
  }
  send(p,args){
    check(!['ihcp.request','ihcp.reply'].includes(args.kind),'RESERVED_KIND');

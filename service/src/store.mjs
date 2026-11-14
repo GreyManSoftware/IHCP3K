@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
+import {checkWriteBudget,checkAdmission,RETENTION} from './retention.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 export class ServiceError extends Error {
@@ -13,6 +14,7 @@ export class Store extends EventEmitter {
     super();
     this.setMaxListeners(100);
     this.now = now;
+    this.filename=filename;
     this.shared=shared;
     this.recipients = new Set(recipients);
     this.maxPending = maxPending;
@@ -33,6 +35,7 @@ export class Store extends EventEmitter {
     try {
     this.db = new DatabaseSync(filename);
     this.db.exec('PRAGMA busy_timeout=5000;');
+    if(shared&&!this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1").get())this.db.exec('PRAGMA auto_vacuum=INCREMENTAL;');
     if(shared)this.db.function('ihcp_writer_version',()=>6);
     const version = this.db.prepare('select sqlite_version() as v').get().v;
     const [major, minor, patch] = version.split('.').map(Number);
@@ -88,6 +91,7 @@ export class Store extends EventEmitter {
   }
   transaction(fn) {
     const depth=this.transactionDepth??0,savepoint='nested_'+depth;
+    if(!depth&&this.shared)checkWriteBudget(this);
     // SQLite performs bounded native busy retries. Never replay a callback:
     // only lock acquisition can fail before any of its effects occur.
     try{this.db.exec(depth?`SAVEPOINT ${savepoint}`:'BEGIN IMMEDIATE');}
@@ -98,7 +102,9 @@ export class Store extends EventEmitter {
       requireThat(!value?.then,'ASYNC_TRANSACTION_FORBIDDEN');
       this.db.exec(depth?`RELEASE ${savepoint}`:'COMMIT');return value;
     } catch(e) {
-      this.db.exec(depth?`ROLLBACK TO ${savepoint}; RELEASE ${savepoint}`:'ROLLBACK');throw e;
+      if(this.db.isTransaction)this.db.exec(depth?`ROLLBACK TO ${savepoint}; RELEASE ${savepoint}`:'ROLLBACK');
+      if(e.errcode===13)throw new ServiceError('DATABASE_CAPACITY');
+      throw e;
     } finally {this.transactionDepth=depth;}
   }
   recipient(id) { requireThat(this.recipients.has(id), 'UNKNOWN_RECIPIENT'); }
@@ -193,6 +199,7 @@ export class Store extends EventEmitter {
         requireThat(old.input_hash === inputHash, 'IDEMPOTENCY_CONFLICT');
         return {id:old.id,state:old.state,duplicate:true};
       }
+      if(this.shared)checkAdmission(this,'messages',RETENTION.maxMessages);
       requireThat(this.db.prepare("SELECT count(*) AS n FROM messages WHERE state!='completed'").get().n < this.maxPending, 'CAPACITY_REACHED');
       const id = randomUUID(), at = this.now();
       this.db.prepare("INSERT INTO messages(id,sender,recipient,dedup_key,input_hash,kind,body,state,created_at) VALUES(?,?,?,?,?,?,?,'pending',?)").run(id,principal.id,recipient,idempotency_key,inputHash,kind,body,at);
