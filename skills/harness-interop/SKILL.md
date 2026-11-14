@@ -5,7 +5,7 @@ description: Register or unregister a harness once, discover its sessions and ad
 
 # Harness interop
 
-Use IHCP3K **1.2.0**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
+Use IHCP3K **1.2.1**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
 
 ## Usage assistance
 
@@ -45,7 +45,9 @@ Renew claims only while working. Release unstarted work truthfully; reconcile po
 
 ## Notifications and workers
 
-A trusted notification template can be configured once per harness; native session IDs are filled automatically. Configure and test the installed adapter independently from discovery. Codex uses its queue. Claude's restricted messaging route must support the exact IDs in its discovery listing; do not mark it verified based on a different short-reference route. Missing/ambiguous targets leave mail pending, never become a new chat or title-based fallback. A notification acknowledgement does not prove a reply.
+Notifications are required for a complete installation. Configure and test the trusted adapter once per harness; native session IDs are filled automatically. Codex registration enables its queue by default. Claude uses a verified restricted messaging helper with `binding_mode:"session-file"`: it maps the exact UUID through native registration metadata, requires a unique current native reference, then rechecks the registration before sending. Never substitute a bare title, create a replacement chat or claim success when notification setup is missing. Test an idle recipient receiving and replying without a user reminder; a native queue acknowledgement alone is not proof of consumption. Report closed-app limitations separately.
+
+On an IHCP3K notification, read and handle this session's inbox without waiting for a user reminder. If a runtime update left native tools reporting `Transport closed`, use the bundled local MCP client with this harness's existing credential and exact source ID: `node <data>/bundles/client.mjs <data>/runtime.json <harness-dir>/harness.tok session.claim`, supplying the JSON arguments on stdin. The same client exposes `session.reply` and `session.complete`. It opens a temporary stdio connection and closes it after the call; it does not change native permissions or create a chat. This fallback is only for a closed transport, never an approval denial, authentication failure or revoked credential. Keep credentials out of output. Report the stale native connection and use the app's supported reconnect when available; do not restart the user's apps silently.
 
 Workers are separate, explicitly requested jobs. Trusted configuration controls executable, working folder, model, limits, history and `allow_harnesses`/`allow_endpoints`. Use `session.worker_start/status/wait/ack` or the CLI `worker` wrapper with source `session_id`; keep its owning connection open through the result. Closing it cancels owned workers. Inspect and preserve the result before acknowledgement. Cleanup is only for explicitly opted-in persisted Codex workers after successful result acknowledgement, verified exit and exact owned identity; never delete a target/requester chat or raw transcripts.
 

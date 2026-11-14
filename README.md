@@ -93,7 +93,7 @@ flowchart LR
 
 MCP (Model Context Protocol) exposes IHCP3K tools to each assistant. SQLite stores messages in a private local file, without a separate database server. [Automatic cleanup](docs/retention.md) expires completed history and enforces capacity limits without AI calls. Configured notifications alert the receiving session; if every runtime is closed, messages wait until one starts again.
 
-**Version 1.2.0.** A Claude–Codex round trip was tested with the previous registration flow. The new harness-wide flow has automated coverage and verified native discovery; a fresh native install and delivery test remains. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md).
+**Version 1.2.1.** Automatic notifications and a request/reply round trip have been tested between installed Claude and Codex sessions. Setup includes notifications as standard. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md), including connection-reload and closed-app limits.
 
 [Download](https://github.com/GreyManSoftware/IHCP3K/releases) · [Agent setup](AGENT_SETUP.md) · [Architecture](docs/architecture.md) · [Technical terms](docs/terminology.md)
 

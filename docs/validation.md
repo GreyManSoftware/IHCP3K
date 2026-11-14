@@ -2,6 +2,12 @@
 
 This page distinguishes automated tests from checks performed in real agent applications. A **fixture** is controlled test data or a simulated app response; a **rehearsal** exercises a specific real workflow. Neither proves compatibility with every app version. Technical terms are defined in [terminology](terminology.md).
 
+## Version 1.2.1: automatic notifications
+
+The full suite passed **125 tests** (85 service, 16 legacy waiter, 3 queue/help, 13 legacy import, 8 installer); the eight packaged installer checks also passed on Windows after the version bump. Added coverage checks automatic Codex notification configuration, rejected incomplete Claude configuration, and unique UUID-to-native-registration resolution, including missing and duplicate bindings.
+
+An installed Windows Claude–Codex round trip was observed: the runtime notified an idle Claude session, which claimed and replied through its native MCP tools without a human reminder. The reply generated a native queue notification that arrived in the original Codex chat. Claude reconnected its MCP tools without a manual reload. Codex's existing tool connection remained closed after the runtime update; its bundled local MCP client successfully handled the reply. The skill documents this temporary transport fallback. This proves notification delivery in that installed workflow, not closed-app wake or universal client reconnection.
+
 ## Version 1.2.0: bounded retention
 
 The full rebuilt suite passed **124 tests** (84 service, 16 legacy waiter, 3 queue/help, 13 legacy import, 8 installer). New tests cover complete request/reply deletion without dangling links, pending and uncertain preservation, finite duplicate prevention, inactive referenced sessions, acknowledged versus uncertain worker history, capacity rejection with atomic rollback, and a real SQLite reader blocking WAL checkpointing. Targeted retention tests also passed on Windows. This release uses the harness-first public command `/remote_prompt Claude Ask the review agent to do ABC`; native routing still requires an available unambiguous destination.

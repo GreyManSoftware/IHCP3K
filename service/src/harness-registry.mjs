@@ -2,6 +2,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {ServiceError} from './store.mjs';
 import {checkAdmission,RETENTION} from './retention.mjs';
 import {discoverSessions,validateDiscovery} from './session-discovery.mjs';
+import {buildNativeCommand} from './native-adapters.mjs';
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const check=(v,c)=>{if(!v)throw new ServiceError(c);};
 const validId=v=>typeof v==='string'&&/^[a-z][a-z0-9-]{0,63}$/.test(v);
@@ -21,7 +22,12 @@ export class HarnessRegistry{
   check(p.permissions.includes('registry'),'FORBIDDEN');check(validId(harness)&&typeof credential==='string'&&/^[A-Za-z0-9_-]{43,128}$/.test(credential),'INVALID_HARNESS');
   check(Array.isArray(peers)&&peers.length<=100&&peers.every(id=>id==='*'||validId(id))&&new Set(peers).size===peers.length,'INVALID_HARNESS_PEERS');
   validateDiscovery(discovery);this.store.directory.validateProfile(profile);
+  if(notification===undefined&&discovery.type==='codex')notification={enabled:true,type:'codex-queue'};
+  check(notification,'NOTIFICATION_CONFIGURATION_REQUIRED');
   if(notification)check(notification.enabled===true&&['codex-queue','claude-message'].includes(notification.type)&&((discovery.type==='codex'&&notification.type==='codex-queue')||(discovery.type==='claude'&&notification.type==='claude-message')),'INVALID_NOTIFICATION_TEMPLATE');
+  check(buildNativeCommand({...notification,executable:discovery.executable,cwd:discovery.cwd,
+    native_session_id:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',target:{stable_id:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'},
+    permissions:'read-only',persist:false},'notify',{recipient:'setup-check'}).status==='ready','INVALID_NOTIFICATION_TEMPLATE');
   const config=notification?{...discovery,notification}:discovery;
   return this.store.transaction(()=>{
    const old=this.db.prepare('SELECT * FROM harnesses WHERE id=?').get(harness);

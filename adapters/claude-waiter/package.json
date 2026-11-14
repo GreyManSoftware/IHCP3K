@@ -1,6 +1,6 @@
 {
   "name": "claude-waiter",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "type": "module",
   "description": "Claude PA wake adapter: an in-session background waiter that calls the coordination service's wake.wait MCP tool and exits when work is pending.",

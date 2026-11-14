@@ -1,6 +1,6 @@
 # Agent setup and operation
 
-Install **IHCP3K 1.2.0** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
+Install **IHCP3K 1.2.1** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
 
 ## First install
 
@@ -9,7 +9,7 @@ Ask exactly one setup question: **“Where do you want to install it?”** If th
 The agent handles the rest:
 
 1. Record that folder as `<install-root>`. Store the extracted release under `app/`, private runtime data under `data/`, and harness credentials under `data/harnesses/<harness-id>/`. Create needed parent folders; let the installer create and protect `data/`. Keep private data out of Git and shared/public folders.
-2. Download `IHCP3K-1.2.0.zip` and its `.sha256` file from [the release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v1.2.0), verify the hash and extract the package contents into `app/`. Use the included guide and [skill](skills/harness-interop/SKILL.md).
+2. Download `IHCP3K-1.2.1.zip` and its `.sha256` file from [the release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v1.2.1), verify the hash and extract the package contents into `app/`. Use the included guide and [skill](skills/harness-interop/SKILL.md).
 3. Use existing Node 24.15+ (SQLite 3.51.3+). Respect the user's software-installation policy if it is missing. The prebuilt package needs no npm install or Docker at runtime.
 4. Run the following from `app/`, replacing the placeholder with the selected absolute path. The helper working directory defaults to `data/`; no separate question or `--workdir` is needed.
 
@@ -49,8 +49,8 @@ Prepare a private configuration (replace every placeholder):
     "models": [],
     "usage": [],
     "wake": {
-      "type": "manual",
-      "lifetime": "Until a notification adapter is validated",
+      "type": "native-queue",
+      "lifetime": "While the configured native receiver is available",
       "closed_app": "unknown",
       "human_fallback": "Open the target and check its inbox"
     }
@@ -92,9 +92,11 @@ Do not send work just because a model or session appears in discovery. User auth
 
 ## Notifications and optional workers
 
-Registration/discovery does not prove that a receiving chat has read a message. Configure and validate notifications **once per harness**. An optional top-level `notification` template in the registration configuration is inherited by discovered sessions, with exact native IDs filled by the service; users do not register notification targets individually.
+Registration/discovery does not prove that a receiving chat has read a message. Configure and validate notifications **once per harness**. A required top-level `notification` template in the registration configuration is inherited by discovered sessions, with exact native IDs filled by the service; users do not register notification targets individually.
 
-For Codex the template is `{"enabled":true,"type":"codex-queue"}`. For Claude it is a validated `claude-message` template with explicit model, `verified:true` and bounded turns. The Claude route must support the exact IDs returned by `agents --json`; older short-reference-only native listings may fail to match. Never set `verified:true` without checking the installed route. Missing/ambiguous targets leave mail pending; do not substitute a new chat or a title match. See [native adapters](docs/native-adapters.md).
+Codex registration defaults to `{"enabled":true,"type":"codex-queue"}`. Claude requires `{"enabled":true,"type":"claude-message","binding_mode":"session-file","model":"<verified available model>","verified":true,"max_turns":6}`. Validate the installed restricted messaging route before setting `verified:true`. It maps the discovered UUID through native session registration metadata, checks a unique current native reference, and rechecks the binding before sending. Missing or ambiguous targets leave mail pending. See [native adapters](docs/native-adapters.md).
+
+**Notifications are part of setup, not an optional extra.** Test a harmless request and reply while each receiving chat is idle, without asking either user to check an inbox. Record native queuing separately from the receiving chat actually claiming and answering. Do not call the install complete with disabled, unconfigured or untested notifications. If native access is blocked, report setup as incomplete and the exact blocker; preserve the pending message. Closed-app delivery is a separate capability and must not be promised without proof.
 
 Explicit task workers remain optional. Configure trusted executable/model/limits and `allow_harnesses:["codex-local"]` for harness-wide permission, or a narrower `allow_endpoints` list. Use the `session.worker_*` tools or CLI `worker` with `session_id` in its input. The owning connection must remain open; shutdown cancels owned workers. Review and acknowledge successful results before configured cleanup. Native cleanup is currently implemented only for opted-in persisted Codex workers, with verified exit and exact identity. No guarantees of zero logs or secure erasure.
 

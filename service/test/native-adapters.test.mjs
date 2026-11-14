@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {buildNativeCommand, notifyNative, runNativeWorker, cleanupNativeWorker} from '../src/native-adapters.mjs';
+import {buildNativeCommand, notifyNative, runNativeWorker, cleanupNativeWorker,claudeSessionBinding} from '../src/native-adapters.mjs';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 
 const ID = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
 const OTHER = 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
@@ -151,6 +154,21 @@ test('Claude notification requires verified stable binding and separates worker 
   assert.ok(args.includes('--no-session-persistence'));
   assert.ok(input.includes(ID)); assert.ok(input.includes('test-host'));
   assert.equal(args.includes('--resume'), false);
+});
+
+test('Claude notification resolves a unique native UUID registration and refuses missing or ambiguous bindings',async t=>{
+  const root=mkdtempSync(join(tmpdir(),'ihcp-binding-')),dir=join(root,'sessions');mkdirSync(dir);
+  t.after(()=>rmSync(root,{recursive:true,force:true}));
+  const file=join(dir,'123.json'),entry={pid:123,sessionId:ID,name:'Synthetic target',startedAt:1};
+  const config={...claude,binding_mode:'session-file',sessions_directory:dir};
+  assert.equal(claudeSessionBinding(ID,dir),null);
+  assert.equal((await notifyNative(config,{recipient:'test-inbox',spawnProcess:()=>assert.fail('missing binding must not spawn')})).reason,'native_session_binding_unavailable');
+  writeFileSync(file,JSON.stringify(entry));assert.equal(claudeSessionBinding(ID,dir),file);
+  const {spawnProcess,calls}=fake({stdout:claudeJson()});await notifyNative(config,{recipient:'test-inbox',spawnProcess});
+  assert.ok(calls[0].input.includes(JSON.stringify(file)));assert.match(calls[0].input,/Re-read binding_file/);
+  writeFileSync(join(dir,'124.json'),JSON.stringify({...entry,pid:124}));assert.equal(claudeSessionBinding(ID,dir),null);
+  writeFileSync(join(dir,'124.json'),JSON.stringify({...entry,pid:124,sessionId:OTHER}));assert.equal(claudeSessionBinding(ID,dir),file);
+  writeFileSync(file,JSON.stringify({...entry,pid:999}));assert.equal(claudeSessionBinding(ID,dir),null);
 });
 
 test('workers parse actual native JSON identities and completion, never prose or requested IDs', async () => {

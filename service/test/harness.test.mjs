@@ -21,8 +21,9 @@ test('one harness grant discovers existing and later sessions; stable IDs surviv
  assert.equal(register('alpha').reused,true);
  assert.equal((await r.discover(a)).harnesses.find(h=>h.harness==='alpha').sessions.length,2);
  assert.equal(store.db.prepare('SELECT count(*) n FROM credentials').get().n,0);
- const configured=JSON.parse(store.db.prepare('SELECT config_json FROM harnesses WHERE id=?').get('alpha').config_json);configured.notification={enabled:true,type:'codex-queue'};store.db.prepare('UPDATE harnesses SET config_json=? WHERE id=?').run(JSON.stringify(configured),'alpha');
+ const configured=JSON.parse(store.db.prepare('SELECT config_json FROM harnesses WHERE id=?').get('alpha').config_json);assert.deepEqual(configured.notification,{enabled:true,type:'codex-queue'});
  assert.equal(r.notificationFor(sessionAddress('alpha','a1')).native_session_id,'a1');
+ for(const notification of [undefined,{enabled:false,type:'claude-message'},{enabled:true,type:'claude-message',verified:false,model:'test'}])assert.throws(()=>r.register(admin,{harness:'claude',credential:'c'.repeat(43),discovery:{type:'claude',executable:'/native/claude',cwd:'/alpha'},profile,notification}),/NOTIFICATION/);
  inventory.alpha=[row('a2'),row('a3')];await r.discover(a,{force:true});
  assert.equal(store.db.prepare('SELECT active FROM endpoints WHERE id=?').get(sessionAddress('alpha','a1')).active,0);
  assert.deepEqual((await r.discover(a)).harnesses.find(h=>h.harness==='alpha').sessions.map(s=>s.native_id),['a2','a3']);
