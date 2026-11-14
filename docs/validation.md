@@ -2,6 +2,14 @@
 
 This page distinguishes automated tests from checks performed in real agent applications. A **fixture** is controlled test data or a simulated app response; a **rehearsal** exercises a specific real workflow. Neither proves compatibility with every app version. Technical terms are defined in [terminology](terminology.md).
 
+## Version 1.1.0: harness registration
+
+The rebuilt 1.1.0 bundles passed **121 automated tests**: 81 service, 16 legacy waiter, 3 queue/command-help, 13 legacy import and 8 installer checks. New cases cover registration reuse, automatic new/missing session discovery, stable addresses, reciprocal permissions, explicit source-session isolation, whole-harness revocation, fresh credentials on relink, failed scans, competing process leases and offline restore. Official MCP SDK clients exercise the new tools and worker ownership. Native command fixtures cover pagination, malformed listings, timeouts and unsupported adapters. The eight packaged installer checks also passed separately on Windows Node 24.15.0.
+
+Read-only discovery also passed against the installed Windows Codex and Claude executables. Codex returned unarchived thread metadata; Claude returned the live sessions exposed by `agents --json`. No transcripts were read or model tasks started. Codex's isolated inventory process reported `notLoaded`; that is not evidence that the corresponding desktop sessions are inactive.
+
+This validates discovery, not a completed fresh native installation or end-to-end delivery under the new harness registration. Claude notification targeting must be checked with the exact IDs returned by its listing; the historical short-reference delivery below does not prove that. Historical Claude chats omitted by the native listing and automatic Copilot discovery are not supported by these adapters. The user will run the actual installation acceptance steps in [agent setup](../AGENT_SETUP.md).
+
 ## Version 1.0.0 — 14 November 2026
 
 The full automated suite passed against freshly rebuilt 1.0.0 bundles: **108 tests** (69 service, 16 legacy waiter, 3 queue/command-help, 13 legacy import and 7 installer checks). The two new help tests exercise every CLI mode, missing arguments, explicit help, unknown options and aliases. The existing installer workflow now exercises `remote_prompt`, its compatibility aliases and `unregister`, verifying that revoked sessions cannot discover peers and another session remains usable.

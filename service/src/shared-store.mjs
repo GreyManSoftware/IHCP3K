@@ -3,6 +3,7 @@ import {existsSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {Store,ServiceError} from './store.mjs';
 import {Directory} from './directory.mjs';
+import {HarnessRegistry} from './harness-registry.mjs';
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const check=(v,c)=>{if(!v)throw new ServiceError(c);};
 
@@ -12,6 +13,7 @@ export class SharedStore extends Store {
    let guard;
    let version=0;
    if(filename!==':memory:'&&existsSync(filename)){const probe=new DatabaseSync(filename,{readOnly:true});try{version=probe.prepare('PRAGMA user_version').get().user_version;}finally{probe.close();}}
+   if(version===5)throw new ServiceError('OFFLINE_RESTORE_REQUIRED');
    if(filename!==':memory:'&&version<5){
      guard=new DatabaseSync(filename+'.owner');
      try{guard.exec('PRAGMA busy_timeout=5000; CREATE TABLE IF NOT EXISTS owner_guard(id INTEGER PRIMARY KEY); BEGIN EXCLUSIVE;');}
@@ -21,6 +23,7 @@ export class SharedStore extends Store {
    catch(e){guard?.close();throw e;}
    try {
     this.directory=new Directory(this);
+    this.harnesses=new HarnessRegistry(this);
     this.transaction(()=>{
      this.db.exec(`CREATE TABLE IF NOT EXISTS attendance (recipient TEXT PRIMARY KEY,principal TEXT NOT NULL,handler_id TEXT NOT NULL,token_hash TEXT NOT NULL,deadline INTEGER NOT NULL);
        CREATE TABLE IF NOT EXISTS maintenance_lease (id INTEGER PRIMARY KEY,owner TEXT NOT NULL,until_ms INTEGER NOT NULL);
@@ -28,14 +31,14 @@ export class SharedStore extends Store {
        CREATE TABLE IF NOT EXISTS requests (message_id TEXT PRIMARY KEY REFERENCES messages(id),reply_to TEXT NOT NULL,request_id TEXT NOT NULL);
        CREATE TABLE IF NOT EXISTS replies (message_id TEXT PRIMARY KEY REFERENCES messages(id),request_message_id TEXT NOT NULL UNIQUE REFERENCES messages(id));
        CREATE TABLE IF NOT EXISTS workers (id TEXT PRIMARY KEY,owner TEXT NOT NULL,endpoint TEXT NOT NULL,adapter TEXT NOT NULL,dedup_key TEXT NOT NULL,input_hash TEXT NOT NULL,config_hash TEXT NOT NULL,state TEXT NOT NULL,result_json TEXT,created_at INTEGER NOT NULL,deadline INTEGER NOT NULL,acknowledged_at INTEGER,cleanup_action TEXT NOT NULL,cleanup_after INTEGER,cleanup_state TEXT NOT NULL,UNIQUE(owner,dedup_key));
-       INSERT OR IGNORE INTO metadata VALUES('writer_version','5');`);
-     check(this.db.prepare("SELECT value FROM metadata WHERE key='writer_version'").get().value==='5','WRITER_VERSION_MISMATCH');
+       INSERT OR IGNORE INTO metadata VALUES('writer_version','6');`);
+     check(this.db.prepare("SELECT value FROM metadata WHERE key='writer_version'").get().value==='6','WRITER_VERSION_MISMATCH');
      // An older already-open connection lacks this function and cannot write.
      for(const {name} of this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()){
        check(/^[a-z_]+$/.test(name),'INVALID_SCHEMA');
        for(const op of ['INSERT','UPDATE','DELETE'])this.db.exec(`CREATE TRIGGER IF NOT EXISTS fence_${name}_${op} BEFORE ${op} ON ${name} BEGIN SELECT CASE WHEN ihcp_writer_version() != CAST((SELECT value FROM metadata WHERE key='writer_version') AS INTEGER) THEN RAISE(ABORT,'WRITER_VERSION_MISMATCH') END; END;`);
      }
-     this.db.exec('PRAGMA user_version=5;');
+     this.db.exec('PRAGMA user_version=6;');
     });
    } catch(e) {this.close();throw e;} finally {guard?.close();}
  }

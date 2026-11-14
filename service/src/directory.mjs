@@ -23,6 +23,7 @@ export class Directory {
   }
   audit(p,action,id){this.db.prepare('INSERT INTO directory_audit(principal,action,endpoint,at) VALUES(?,?,?,?)').run(p.id,action,id,this.store.now());}
   active(p){
+    if(p.harness_hash)return this.store.harnesses?.active(p)??false;
     if(!p.directory_hash)return true;
     return !!this.db.prepare('SELECT 1 FROM credentials c JOIN endpoints e ON e.id=c.endpoint WHERE c.hash=? AND c.revoked=0 AND e.active=1').get(p.directory_hash);
   }

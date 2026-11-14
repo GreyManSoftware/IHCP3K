@@ -2,7 +2,9 @@
 
 Use this guide to move stored data or restore a backup. The **source** is the old installation; the **destination** is the new private folder. **Reconciliation** means inspecting incomplete requests and checking whether they already caused changes before retrying them. A **cutover** is the later, explicit switch of clients to the destination. See [terminology](terminology.md) for backup and message-state terms.
 
-## v1.0.0 local installation from an offline backup
+Version 1.1 uses schema 6 and harness-wide credentials. A version 1.0/schema-5 runtime cannot be reused in place. Restore a verified offline snapshot to a new directory, then register the harnesses with fresh credentials. Restored harness registrations are disabled, session addresses remain inactive and old tokens stay revoked. Native session discovery repopulates the active directory only after intentional registration.
+
+## v1.1.0 local installation from an offline backup
 
 This is an explicit offline operation, separate from normal installation and live cutover. A restore does not itself switch a live installation. Respect actual native execution restrictions throughout the migration. Do not start an older HTTP owner alongside new stdio writers or let two databases accept normal traffic as the same authority.
 

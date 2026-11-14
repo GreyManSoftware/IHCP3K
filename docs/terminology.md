@@ -4,16 +4,16 @@ The README uses ordinary language. These definitions cover names found in the in
 
 | Term | Meaning in IHCP3K |
 | --- | --- |
-| Harness | An application that runs an AI agent, such as Claude Code or Codex. |
+| Harness | An application/account installation that runs an AI agent, such as Claude Code or Codex. It registers once; distinct accounts/hosts are distinct instances. |
 | Native | The harness's own interface, commands, settings or permissions. |
 | MCP | Model Context Protocol: the tool interface a harness uses to call IHCP3K operations. |
 | Runtime | A running IHCP3K process. “Runtime folder” means its private configuration, database, credentials and executable bundles. |
 | Stdio | Communication through a local process's standard input and output, without an HTTP server. |
-| Endpoint | A registered IHCP3K messaging identity, normally bound to a particular session. It is not necessarily a network URL. |
+| Endpoint | An IHCP3K session address, automatically derived from harness ID and native session ID. Legacy addresses can also be individually enrolled. It is not necessarily a network URL. |
 | Binding | The recorded app, host and exact native session identity behind an endpoint. |
 | Directory / discovery | The list of registrations a caller is permitted to see, with advertised models and dated usage observations. |
 | Principal / scope | An authenticated identity, and the operations or recipients its credential allows. |
-| Enrolment / grant | One-use permission to register an endpoint and contact specified peers. |
+| Enrolment / grant | Legacy one-use permission for per-session registration. The current harness setup uses the operator credential once for a whole harness. |
 | Adapter | Code that translates an IHCP3K operation into a harness-specific command. |
 | Notification / wake | A signal telling an existing session that mail is waiting. It does not prove that the session read or completed the request. |
 | Waiter | A program waiting for pending mail, without reading message bodies or repeatedly asking an AI model to check. |

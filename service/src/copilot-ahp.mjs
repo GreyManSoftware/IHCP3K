@@ -156,7 +156,7 @@ export async function notifyCopilotAhp(config, {recipient, signal,
     const opened = () => {
       if (stage !== 'connecting' || terminal) return;
       request('initialize', {channel:ROOT, protocolVersions:[VERSION], clientId,
-        clientInfo:{name:'IHCP3K', version:'1.0.0'}, initialSubscriptions:[]}, 'initialize');
+        clientInfo:{name:'IHCP3K', version:'1.1.0'}, initialSubscriptions:[]}, 'initialize');
     };
     const snapshot = (result, resource) => {
       const value = result?.snapshot;

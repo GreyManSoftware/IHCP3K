@@ -2,11 +2,33 @@
 
 This reference is for adapter developers. **MCP (Model Context Protocol)** exposes the operations listed below as tools. An **endpoint** is a registered session address; a **principal** is the authenticated identity and its permissions. A **claim** temporarily reserves a message for one handler. Its token and increasing **generation** number reject updates from an expired or replaced handler. An **idempotency key** identifies retries of the same operation so they do not create duplicate requests. See [terminology](terminology.md) for the remaining terms.
 
-**v1.0.0.** Default transport: local MCP stdio using the official SDK, an existing Node runtime and one shared SQLite authority. A connection receives the private runtime and credential-file paths; credentials bind the endpoint explicitly. Process lifetime does not establish a chat identity.
+**v1.1.0.** Default transport: local MCP stdio using the official SDK, an existing Node runtime and one shared SQLite authority. A connection receives the private runtime and credential-file paths; credentials bind the harness. Each session operation supplies a source ID checked against its native inventory. Process lifetime does not establish a chat identity.
 
 Optional Docker/HTTP remains **v0.4 compatibility mode**: `/mcp`, Streamable HTTP, `Authorization: Bearer <token>`, stateless transport sessions and one exclusive SQLite owner. It does not expose the correlated request or worker tools below. Never run the old HTTP owner and new stdio writers against the same live database. Synthetic fixture and private live configuration remain separate.
 
 Tools are filtered by principal permissions and enforce recipient scope again at execution. Replies contain JSON text and `structuredContent`; domain errors use `isError` with a stable error code. In HTTP compatibility mode, authentication failures use 401; invalid Host/Origin uses 403. Stdio authenticates from the supplied credential file. Tool availability is filtered by the selected store and principal; a server version string alone does not prove a tool is supported.
+
+## Harness registration and automatic sessions (default in 1.1)
+
+`harness.register` is operator-only: `{harness, credential, discovery, profile, peers, notification?}`. It persists one harness credential and trusted native discovery configuration. Identical retries reuse the registration; conflicting active registrations fail. Peers are harness IDs and must permit each other reciprocally.
+
+A harness credential exposes:
+
+| Tool | Behavior |
+| --- | --- |
+| `harness.discover` | `{force?:boolean}`. Refresh permitted native inventories; return harness profiles, stable session addresses/native IDs, labels, cwd, observed state, last scan and stale/error flags. Successful snapshots cache for 15 seconds. |
+| `harness.unregister` | Revoke this harness and disable all its discovered session addresses atomically. Preserve shared mail and other harnesses. |
+| `session.request`, `session.send`, `session.reply` | The corresponding mail arguments below, plus exact source `session_id`. Requests derive the return address from that verified source. |
+| `session.claim`, `session.status` | `session_id`; claim also accepts `limit` and `lease_s`. The inbox is derived from the source, not caller-supplied recipient. |
+| `session.request_status` | `session_id`, request `id`; only that source's reply inbox is accessible. |
+| `session.complete`, `session.renew`, `session.release` | Source `session_id` plus the corresponding claim fields below. |
+| `session.worker_start/status/wait/ack` | Source `session_id` plus the corresponding worker arguments. Trusted worker configuration may allow a harness through `allow_harnesses` or individual addresses through `allow_endpoints`. |
+
+Session addresses are stable hashes of harness ID and native session ID. Native listings—not titles, supplied messages or MCP process identity—define membership. Missing sessions are disabled only after a complete successful snapshot. Failed scans retain metadata marked stale and cannot authorize sending. A database lease prevents overlapping runtime scans from applying older results. Discovery is bounded, demand-driven and never starts model work. A disappearing/relinked session retains uncertain claims for review.
+
+A shared harness token deliberately trusts that harness's clients to identify their source session. It is not an isolation boundary between malicious clients holding the same token. Foreign-harness source IDs and unpermitted recipients are rejected.
+
+The tables below document the underlying and legacy per-session API. Fresh installation uses the harness tools above, not individual enrolment.
 
 | Tool | Arguments and behavior |
 | --- | --- |
@@ -39,12 +61,12 @@ Use native permissions independently of this protocol. Peer text is not user aut
 
 Register attendance **before** sending a request. While that lease is valid, `wake.wait` withholds pending hints and `wake.reserve` refuses new dispatch reservations for the inbox. `mail.wait` receives and claims mail directly; complete those claims normally. Release attendance in a `finally` path. A timeout is not a reply, and messages may be unrelated to the request.
 
-Attendance lasts at most 120 seconds and does not renew itself. In v1.0.0 it is persisted with a deadline across shared connections; expiry or explicit release restores normal wake behavior. The v0.4 HTTP service uses process-local attendance and drops it on restart. Existing notification throttling and unresolved wake reservations still apply. Sender-only and waiter credentials cannot suppress another session's notifications. An already-reserved or queued message notification cannot be recalled; the response flags that case. Attendance is inbox-wide suppression. Request correlation is supplied separately by the v1.0.0 request tools below.
+Attendance lasts at most 120 seconds and does not renew itself. In v1.1.0 it is persisted with a deadline across shared connections; expiry or explicit release restores normal wake behavior. The v0.4 HTTP service uses process-local attendance and drops it on restart. Existing notification throttling and unresolved wake reservations still apply. Sender-only and waiter credentials cannot suppress another session's notifications. An already-reserved or queued message notification cannot be recalled; the response flags that case. Attendance is inbox-wide suppression. Request correlation is supplied separately by the v1.1.0 request tools below.
 
 The SDK client's local `exchange` helper wraps attend → send → bounded wait → unattend. It is not an additional server tool. It returns the send result and any claimed messages, never completes work automatically, and never retries a send under a new idempotency key.
 
 
-## Registered endpoints (introduced in v0.4)
+## Legacy individually registered endpoints (compatibility only)
 
 The same SQLite authority stores the directory, hashed credentials, one-use enrolments and bounded audit history. `registry` is an offline operator permission. Dynamic session permissions are `send`, own-inbox `claim`/`status`, scoped `discover` and own-profile `profile`; a separate credential has only `wake` and own-inbox `status`.
 
@@ -61,9 +83,9 @@ Relink uses a fresh operator enrolment at the current revision. It revokes old c
 
 Profiles and model suitability descriptions are untrusted, attributed data. Catalogue availability does not prove a model can execute now. Usage records retain their source and observation time; a passed reset timestamp does not reset a value automatically. No AI polling or automatic model dispatch is installed. Native wake binding and its lifetime remain adapter responsibilities.
 
-HTTP compatibility mode uses schema 4. Local stdio uses schema 5, adding durable attendance, maintenance leases, request/reply links and workers, with a writer-version fence. Older incompatible writers must be stopped before migration; never rely on a fence as permission for concurrent old/new operation. Restore disables registered endpoints and revokes their credentials so a backup cannot silently resurrect access removed after that snapshot. Operator relink and restore-pause review are required.
+HTTP compatibility mode uses schema 4. Local stdio uses schema 6, adding durable attendance, maintenance leases, request/reply links and workers, with a writer-version fence. Older incompatible writers must be stopped before migration; never rely on a fence as permission for concurrent old/new operation. Restore disables registered endpoints and revokes their credentials so a backup cannot silently resurrect access removed after that snapshot. Operator relink and restore-pause review are required.
 
-## Correlated requests (v1.0.0 stdio only)
+## Correlated requests (v1.1.0 stdio only)
 
 | Tool | Arguments and result |
 | --- | --- |
@@ -79,7 +101,7 @@ The CLI `remote_prompt`/`request` modes send and return the ID. They do not wait
 
 In stdio, `mail.send`, `mail.request` and `mail.reply` commit first, then await the configured bounded notification before returning (`timeout_ms` capped at 30000, with bounded shutdown). The response includes `native_notification` dispatch status, never proof of target receipt. A one-shot CLI therefore attempts its configured notification before closing. Mail stays durable if notification fails; retry only with the original idempotency key. The active-runtime timer remains for pending recovery. Notifications are disabled until explicitly configured.
 
-## Workers (v1.0.0 stdio only)
+## Workers (v1.1.0 stdio only)
 
 | Tool | Arguments and result |
 | --- | --- |

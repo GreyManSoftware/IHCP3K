@@ -2,9 +2,17 @@
 
 An **adapter** connects IHCP3K to an app's own commands. A **notification adapter** tells an existing session that a message is waiting. A **task worker** starts a separate, time-limited session to do explicitly requested work. **Retention** controls how long a worker's chat history is kept. An **endpoint revision** is a registration version used to reject outdated target mappings. See [terminology](terminology.md) for configuration terms.
 
-**v1.0.0; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
+**v1.1.0; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
 
 A request to an existing session and a new worker are different operations. `remote_prompt` sends durable mail; the configured adapter notifies the existing target. `worker` explicitly creates a separately owned session to do a bounded task. Delivery failure must not silently substitute a worker or resumed session.
+
+## Harness-wide discovery and notification setup
+
+Version 1.1 registers a harness once. Codex's read-only [`thread/list`](https://learn.chatgpt.com/docs/app-server) and Claude's `agents --json` provide automatic session inventories; new sessions need no per-session credentials. See [agent setup](../AGENT_SETUP.md) for supported scope and limits.
+
+An optional `notification` template in the private harness registration is inherited by discovered sessions. The runtime fills the exact native ID and current session revision. Codex templates use `codex-queue`; Claude templates use `claude-message` only after validating support for the discovery listing's exact IDs. A previous test with a different short reference does not establish that support. Unsupported targets leave messages pending, rather than prompting per-session registration or silently starting another chat.
+
+The explicit `runtime.notifications` maps below remain available for legacy/manual adapter configuration. They are not required for registering every newly discovered session. Worker configuration may allow an entire registered harness with `allow_harnesses`, with source-specific results still isolated by the explicit session identity.
 
 ## Trusted configuration
 

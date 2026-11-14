@@ -10,7 +10,7 @@ test('every command provides usage before resolving paths or credentials',()=>{
   }
   assert.equal(parseInvocation([]).help,true);
   assert.equal(parseInvocation(['prompt','missing-session']).help,true);
-  assert.equal(parseInvocation(['register','runtime','code','profile']).help,true);
+  assert.equal(parseInvocation(['register','runtime','config']).help,true);
   assert.throws(()=>parseInvocation(['typo']),/UNKNOWN_MODE.*--help/);
 });
 test('aliases and explicit arguments preserve routing without executing commands',()=>{

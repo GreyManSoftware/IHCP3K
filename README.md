@@ -18,11 +18,19 @@ Approaching your allowance limit? Prepare a handover before it runs out:
 
 Each subscription keeps its own limits. IHCP3K shares requests and results; it doesn't pool allowances, clone chat history or automatically merge memories.
 
-## Use models outside your current app
+## Use the right model for the job
 
-Ask a connected assistant for a fresh review, an alternative design or a focused investigation, then use its answer in your current conversation.
+Your preferred app doesn't have to limit your choice of model. You might favour one model for implementation, another for architecture, and a third for reviewing a difficult change. IHCP3K lets you use those strengths across connected harnesses and bring the results back to the conversation you're already in.
 
-> Show me the models advertised by my connected harnesses and when that information was checked. Suggest one for reviewing this database migration, and let me choose before sending it.
+For example, you can keep working in Codex and ask a connected harness that offers **Fabel 5.x** to review your design:
+
+> Ask a connected session using Fabel 5.x to review this design for concurrency problems. Send it the design and relevant code, then bring its findings back here so we can implement the changes in Codex.
+
+The work runs in the other harness, using its model access; Fabel doesn't need to be available inside Codex. Discovery helps find a suitable session. If none is using the requested model, the assistant explains what needs setting up before sending work.
+
+Unsure which model to use?
+
+> Show me the available models across my connected harnesses. Based on their recorded strengths, suggest one for reviewing this database migration and explain why.
 
 You choose when to delegate. Ordinary prompts stay local; IHCP3K doesn't silently switch models or buy API credits.
 
@@ -40,17 +48,17 @@ The prebuilt release needs an existing Node 24.15+ installation. Docker isn't ne
 
 ## Everyday usage
 
-After setup, use the `harness-interop` skill:
+Register each harness once. IHCP3K discovers its existing and future sessions automatically when you discover or send work—no setup per chat. Use the `harness-interop` skill:
 
 | Mode | Purpose | Example |
 | --- | --- | --- |
-| `/register` | Connect a session. | `/register this session` |
+| `/register` | Connect a harness once. | `/register Codex` |
 | `/discover` | List connected sessions or models. | `/discover models` |
 | `/remote_prompt` | Send a request to another session. | `/remote_prompt codex-review Review this diff` |
 | `/status` | Check a request's progress. | `/status <request-id>` |
-| `/unregister` | Disconnect a harness or session. | `/unregister harness Codex` |
+| `/unregister` | Disconnect a harness. | `/unregister Codex` |
 
-Use a destination returned by `/discover`; `codex-review` is just an example. Unregistering a harness removes its verified registrations and IHCP3K connection settings, preserving other harnesses and shared data.
+Use a destination returned by `/discover`; `codex-review` is just an example. Unregistering a harness revokes its credential and all discovered session addresses; the skill also removes its IHCP3K connection settings. Other harnesses and shared data remain.
 
 **Need help?** Use any mode on its own or add `--help`. The skill explains the arguments and shows examples before acting. `/remote_prompt` can also list available destinations. `/prompt` and `/chat` remain aliases.
 
@@ -77,7 +85,7 @@ flowchart LR
 
 MCP (Model Context Protocol) exposes IHCP3K tools to each assistant. SQLite stores messages in a private local file, without a separate database server. Configured notifications alert the receiving session; if every runtime is closed, messages wait until one starts again.
 
-**Version 1.0.0.** A Claude–Codex round trip has been tested. Copilot support remains experimental and hasn't been tested against an installed host. Other harnesses need compatibility checks; see [validation](docs/validation.md).
+**Version 1.1.0.** A Claude–Codex round trip was tested with the previous registration flow. The new harness-wide flow has automated coverage and verified native discovery; a fresh native install and delivery test remains. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md).
 
 [Download](https://github.com/GreyManSoftware/IHCP3K/releases) · [Agent setup](AGENT_SETUP.md) · [Architecture](docs/architecture.md) · [Technical terms](docs/terminology.md)
 

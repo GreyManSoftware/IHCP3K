@@ -1,21 +1,21 @@
 # Using IHCP3K
 
-A harness is the app running your assistant. Install the [harness-interop skill](../skills/harness-interop/SKILL.md) and connect your sessions using [agent setup](../AGENT_SETUP.md) first.
+A harness is the app running your assistant. Install the [harness-interop skill](../skills/harness-interop/SKILL.md) and register your harnesses once using [agent setup](../AGENT_SETUP.md) first.
 
 ## In a conversation
 
 Tell the assistant to use the skill, then give it a mode and the information it needs:
 
 ```text
-Use harness-interop: /register this session
+Use harness-interop: /register Codex
 Use harness-interop: /discover sessions
 Use harness-interop: /discover models
 Use harness-interop: /remote_prompt codex-review Review this diff; do not edit files.
 Use harness-interop: /status <request-id>
-Use harness-interop: /unregister harness Codex
+Use harness-interop: /unregister Codex
 ```
 
-`codex-review` is a placeholder for an actual permitted session returned by discovery. A session can ask another session directly; no special management chat is needed. Model listings include their source and age, and do not prove that the model or allowance is still available.
+`codex-review` is a placeholder for an actual permitted session returned by discovery. Each harness registers once and its sessions are discovered automatically. A session can ask another session directly; no special management chat is needed. Model listings include their source and age, and do not prove that the model or allowance is still available.
 
 These are instructions interpreted by the skill. They do not install native slash commands or autocomplete. Where the app treats a leading `/` specially, use the full `Use harness-interop: ...` form. Plain-language requests work too.
 
@@ -35,15 +35,13 @@ For `/remote_prompt`, help can show the actual permitted destinations from your 
 /remote_prompt <session> <request>
 ```
 
-`/prompt`, `/chat` and `/request` remain aliases. `/unlink <session>` is the session-only compatibility form of unregister.
+`/prompt`, `/chat` and `/request` remain aliases. `/unlink` is a compatibility alias for unregister; with a harness folder it disconnects the whole harness.
 
-## Disconnect a session or harness
+## Disconnect a harness
 
-- `/unregister session <identity>` revokes one session's registration.
-- `/unregister harness <name>` asks the agent to revoke the selected harness's verified registrations and remove its recorded IHCP3K MCP connection settings. MCP (Model Context Protocol) is the interface that exposes IHCP3K tools inside the app.
-- `/unregister` alone shows help. It never means “remove everything”.
+`/unregister Codex` revokes the chosen harness's credential and all its automatically discovered session addresses. The skill then removes only that harness's recorded IHCP3K MCP configuration. Other harnesses, unrelated settings, source files and shared messages remain.
 
-The agent checks the exact identities and configuration scope, resolves active work, and stops only processes owned by the selected integration. It preserves other harnesses, unrelated settings, the source repository and shared message data. If permissions or missing credentials prevent part of the operation, it reports what remains. The command-line helper below only revokes one registration; configuration removal is an agent-guided operation.
+A bare `/unregister` displays help. Before disconnecting, the agent resolves active work and identifies the exact harness instance. It reports partial native-settings removal honestly. An intentional later registration rotates the revoked credential; old clients do not regain access.
 
 ## All modes
 
@@ -51,12 +49,12 @@ The skill also supports the lower-level modes below. Each must offer usage assis
 
 | Mode | Purpose / required information |
 | --- | --- |
-| `register` | Connect this session; collect its identity, profile and approved registration grant. |
+| `register` | Register one harness, with its native discovery adapter, profile and permitted peer harnesses. No individual chat enrolment. |
 | `discover` | List permitted sessions or their advertised models. |
 | `remote_prompt` | Send a request to a named permitted session. |
-| `status` | Inspect a request ID, or inbox counts with `status inbox`. |
-| `unregister` | Disconnect an explicitly named session or harness. |
-| `refresh` | Update this session's advertised profile and model/usage observations. |
+| `status` | Inspect a request ID, or inbox counts with `status inbox` (the skill supplies the current source ID). |
+| `unregister` | Disconnect an explicitly named harness and all its session addresses. |
+| `refresh` | Force native session discovery again. |
 | `check` | Claim waiting messages for handling; this is not a read-only status check. |
 | `reply` | Reply using a request's current claim credentials. |
 | `send` | Send a message without automatic request/reply tracking. |
@@ -66,8 +64,9 @@ The skill also supports the lower-level modes below. Each must offer usage assis
 | `worker` | Run an explicitly configured task in a separate session. |
 | `worker-status` | Inspect a worker's recorded status/result. |
 | `worker-ack` | Acknowledge a result after checking it. |
-| `enroll` | Administrator: issue a one-use registration grant. |
-| `inspect` | Administrator: inspect a registration. |
+| `enroll` | Legacy administrator: issue a per-session grant; not used for harness registration. |
+| `inspect` | Legacy administrator: inspect an individually enrolled endpoint. |
+| `register-session` | Legacy per-session enrolment only; not part of a fresh install. |
 | `exchange` | Legacy send-and-wait; returned mail may be unrelated to the request. |
 
 Install/relink requests are guided workflows, not extra executable CLI modes. They also require help and collection of missing details before changes.
@@ -80,16 +79,18 @@ Run from the code folder. All modes accept `--help`, even before a runtime or se
 node scripts/ihcp.mjs --help
 node scripts/ihcp.mjs remote_prompt --help
 node scripts/ihcp.mjs unregister --help
-node scripts/ihcp.mjs discover /absolute/private/session
-node scripts/ihcp.mjs remote_prompt /absolute/private/session /absolute/private/request.json
+node scripts/ihcp.mjs discover /absolute/private/harness
+node scripts/ihcp.mjs remote_prompt /absolute/private/harness /absolute/private/request.json
 ```
 
 Example `request.json`:
 
 ```json
-{"recipient":"codex-review","body":"Review the supplied diff; do not edit files.","idempotency_key":"review-001"}
+{"session_id":"<source-native-id>","recipient":"<discovered-session-address>","body":"Review the supplied diff; do not edit files.","idempotency_key":"review-001"}
 ```
 
 Include the actual material to review in the request, or an explicitly accessible file reference. The helper does not attach your current chat or diff automatically. An idempotency key identifies retries of the same request so they do not create duplicate work; use a new key for a different request.
+
+The skill gets the source session ID from reliable native context and matches it to discovery. If unavailable, it asks the user to identify their source chat; this does not register the chat. Every mail/worker input includes that `session_id`.
 
 The command returns a request ID, not an immediate answer. Use `status`, `check` and the reply workflow in [onboarding](onboarding.md). Leading `/` is accepted for CLI mode names too, but the conversational `<session> <request>` shorthand is not CLI syntax: the CLI uses private directory and JSON-file paths.

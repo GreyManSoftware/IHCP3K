@@ -25,7 +25,7 @@ export async function startStdio(runtimeFile,tokenFile){
  });}catch(e){store.close();throw e;}
  let secret;try{secret=fs.readFileSync(tokenFile,'utf8').trim();}catch(e){store.close();throw e;}
  const eq=(a,b)=>{const x=Buffer.from(a),y=Buffer.from(b);return x.length===y.length&&timingSafeEqual(x,y);};
- const authenticate=()=>config.principals.find(p=>eq(p.token,secret))??store.directory.authenticate(secret);
+ const authenticate=()=>config.principals.find(p=>eq(p.token,secret))??store.directory.authenticate(secret)??store.harnesses.authenticate(secret);
  const principal=authenticate();if(!principal){store.close();throw Error('UNAUTHORIZED');}
  store.workers=new WorkerManager(store,runtime.workers??{});
  const notifications=new Notifications(store,Object.fromEntries(Object.entries(runtime.notifications??{}).map(([endpoint,adapter])=>[endpoint,{...adapter,cwd:workingDirectory}])));

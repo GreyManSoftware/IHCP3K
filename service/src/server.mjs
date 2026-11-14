@@ -55,11 +55,51 @@ Object.assign(schemas,{
 Object.assign(permissions,{'directory.enroll':'registry','directory.register':'enroll','directory.refresh':'profile','directory.discover':'discover','directory.deregister':'profile'});
 permissions['directory.inspect']='registry';
 const directoryMethods={'directory.inspect':'inspect','directory.enroll':'issue','directory.register':'register','directory.refresh':'refresh','directory.discover':'discover','directory.deregister':'deregister'};
+const harnessSchemas={
+ 'harness.register':{harness:recipient,credential:z.string(),discovery:profile,profile,peers:z.array(recipient).max(100),notification:profile.optional()},
+ 'harness.discover':{force:z.boolean().default(false)},
+ 'harness.unregister':{},
+ 'session.request':{session_id:z.string().min(1).max(256),...schemas['mail.request']},
+ 'session.send':{session_id:z.string().min(1).max(256),...schemas['mail.send']},
+ 'session.reply':{session_id:z.string().min(1).max(256),...schemas['mail.reply']},
+ 'session.request_status':{session_id:z.string().min(1).max(256),...schemas['mail.request_status']},
+ 'session.claim':{session_id:z.string().min(1).max(256),limit:z.number().int().min(1).max(20).default(10),lease_s:z.number().int().min(1).max(300).default(300)},
+ 'session.status':{session_id:z.string().min(1).max(256)},
+ 'session.complete':{session_id:z.string().min(1).max(256),...schemas['mail.complete']},
+ 'session.renew':{session_id:z.string().min(1).max(256),...schemas['mail.renew']},
+ 'session.release':{session_id:z.string().min(1).max(256),...schemas['mail.release']},
+ 'session.worker_start':{session_id:z.string().min(1).max(256),...schemas['worker.start']},
+ 'session.worker_status':{session_id:z.string().min(1).max(256),...schemas['worker.status']},
+ 'session.worker_wait':{session_id:z.string().min(1).max(256),...schemas['worker.wait']},
+ 'session.worker_ack':{session_id:z.string().min(1).max(256),...schemas['worker.ack']}
+};
+const sessionMethods={request_status:'requestStatus'};
 function equal(a,b) { const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length===bb.length && timingSafeEqual(aa,bb); }
 function reject(res,code,error) { res.writeHead(code,{'Content-Type':'application/json'});res.end(JSON.stringify({error})); }
 
 export function createToolServer(store,directory,principal,abort=new AbortController(),resolvePrincipal=()=>principal){
-    const server=new McpServer({name:'ihcp3k',version:'1.0.0'});
+    const server=new McpServer({name:'ihcp3k',version:'1.1.0'});
+    if(store.harnesses)for(const [name,inputSchema] of Object.entries(harnessSchemas)){
+      if(name.startsWith('session.worker_')&&!store.workers)continue;
+      const permitted=name==='harness.register'?principal.permissions.includes('registry'):principal.permissions.includes('harness');
+      if(!permitted)continue;
+      server.registerTool(name,{description:`IHCP3K ${name}; session_id is the exact source native session ID, never a title`,inputSchema},async(args,extra)=>{
+        try{
+          const current=resolvePrincipal();if(!current||!directory.active(current))throw new ServiceError('REVOKED');
+          const signal=AbortSignal.any([abort.signal,extra.signal]);let value;
+          if(name==='harness.register'){
+            value=store.harnesses.register(current,args);
+            try{await store.harnesses.refresh(args.harness,{force:true,signal});value.discovery={status:'ready',sessions:store.db.prepare('SELECT count(*) n FROM harness_sessions s JOIN endpoints e ON e.id=s.endpoint WHERE s.harness=? AND e.active=1').get(args.harness).n};}
+            catch(e){value.discovery={status:'unavailable',error:e.code??'DISCOVERY_FAILED'};}
+          }
+          else if(name==='harness.discover')value=await store.harnesses.discover(current,args,signal);
+          else if(name==='harness.unregister')value=store.harnesses.unregister(current);
+          else{const op=name.slice(8);value=await store.harnesses.invoke(current,sessionMethods[op]??op,args,signal);}
+          return {content:[{type:'text',text:JSON.stringify(value)}],structuredContent:value};
+        }catch(e){return {isError:true,content:[{type:'text',text:JSON.stringify({error:e instanceof ServiceError?e.code:'INTERNAL_ERROR'})}]};}
+      });
+    }
+
     for (const [name,inputSchema] of Object.entries(schemas)) {
       if(name.startsWith('worker.')&&!store.workers)continue;
       if(!name.startsWith('worker.')&&!directoryMethods[name]&&!store[methods[name]])continue;

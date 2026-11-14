@@ -2,15 +2,17 @@
 
 This page separates implemented features from future work. A **harness** is an app that runs an agent; an **adapter** connects that app's own commands to IHCP3K. See [terminology](terminology.md) for implementation terms.
 
-## Version 1.0.0
+## Version 1.1.0
 
 The implementation was tested during the earlier development releases, including a bounded two-harness rehearsal; native setup and migration still require installed-version verification. See [validation](validation.md) for reported checks and remaining evidence gaps.
 
-Version 1.0.0 provides local MCP stdio on an existing Node runtime, a shared SQLite schema, idempotent private installation, explicit correlated requests/replies, trusted native notifications and bounded worker jobs/results. It retains the directory and scoped credentials. The optional Docker/HTTP deployment remains v0.4 compatibility mode, without the new stdio request/worker APIs.
+Version 1.1.0 provides local MCP stdio on an existing Node runtime, a shared SQLite schema, idempotent private installation, explicit correlated requests/replies, trusted native notifications and bounded worker jobs/results. It retains the directory and scoped credentials. The optional Docker/HTTP deployment remains v0.4 compatibility mode, without the new stdio request/worker APIs.
 
 First installation asks for private state and records the user-chosen working folder, versions, model evidence, privileges, native bindings and retention. Native configuration is prepared for explicit setup. Offline backup restore to a new directory is distinct from live cutover and does not switch callers or unpause mail.
 
 Ordinary prompts stay local. Codex notifications are deterministic; Claude notification workers require a validated no-persist messaging combination. Copilot workers are explicitly experimental; the documented existing-session AHP route is not yet a validated live integration. No automatic model routing or paid fallback is introduced.
+
+Harness-wide registration and automatic session inventory are implemented for the installed Codex and Claude listing interfaces. Public commands no longer require registering each chat. Discovery does not imply that a native notification reached the target or that a dormant app can be awakened.
 
 ## Remaining gates
 

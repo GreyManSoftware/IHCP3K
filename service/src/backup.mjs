@@ -38,8 +38,8 @@ export function restore(source,destination,{sha256,recipients}) {
     if(digest(stage)!==sha256)throw Error('BACKUP_HASH_MISMATCH');
     db=new DatabaseSync(stage);check(db);
     const schema=db.prepare('PRAGMA user_version').get().user_version;
-    if(schema>5)throw Error('SCHEMA_VERSION_UNSUPPORTED');
-    if(schema===5)db.function('ihcp_writer_version',()=>5);
+    if(schema>6)throw Error('SCHEMA_VERSION_UNSUPPORTED');
+    if(schema>=5)db.function('ihcp_writer_version',()=>schema);
     db.exec('BEGIN IMMEDIATE');
     if(db.prepare("SELECT 1 FROM sqlite_master WHERE name='endpoints'").get()){
       recipients=[...new Set([...recipients,...db.prepare('SELECT id FROM endpoints').all().map(r=>r.id)])];
@@ -48,7 +48,7 @@ export function restore(source,destination,{sha256,recipients}) {
     }
     const recorded=db.prepare('SELECT DISTINCT recipient FROM messages UNION SELECT recipient FROM pauses').all();
     if(recorded.some(r=>!recipients.includes(r.recipient)))throw Error('RESTORE_RECIPIENT_MISMATCH');
-    if(schema===5){
+    if(schema>=5){
       db.exec("DELETE FROM attendance; DELETE FROM maintenance_lease; UPDATE workers SET state='uncertain' WHERE state='running'; UPDATE workers SET cleanup_state='uncertain' WHERE cleanup_state IN ('pending','reserved');");
       if(db.prepare("SELECT 1 FROM sqlite_master WHERE name='wake_waiters'").get())db.exec('DELETE FROM wake_waiters;');
     }
@@ -57,6 +57,8 @@ export function restore(source,destination,{sha256,recipients}) {
     const pauseId='restore-review-'+randomUUID(),now=Date.now();
     for(const recipient of recipients)db.prepare('INSERT INTO pauses VALUES(?,?,?)').run(recipient,pauseId,now);
     db.prepare('INSERT OR REPLACE INTO metadata VALUES(?,?)').run('restore',JSON.stringify({sha256,pause_id:pauseId,at:now}));
+    if(schema===6)db.exec('UPDATE harnesses SET active=0,revision=revision+1; DELETE FROM harness_scans;');
+    if(schema===5){db.exec("UPDATE metadata SET value='6' WHERE key='writer_version'; PRAGMA user_version=6;");db.function('ihcp_writer_version',()=>6);}
     db.exec('COMMIT; PRAGMA wal_checkpoint(TRUNCATE);');check(db);db.close();db=undefined;
     const fd=fs.openSync(stage,'r+');try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
     fs.linkSync(stage,destination);fs.unlinkSync(stage);

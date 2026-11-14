@@ -4,9 +4,11 @@ IHCP3K is designed for trusted agent applications on one computer. Remote multi-
 
 ## Credentials and permissions
 
-Each registered session receives credentials limited to its permitted recipients and its own inbox. Separate notification credentials can check whether mail is waiting without reading the contents. Administrator credentials stay out of the tool configuration exposed to agents. Public demo credentials are test-only and are rejected by live mode.
+Each registered harness receives a credential restricted to its permitted peer harnesses. Each mail operation identifies its source session, which must exist in the owning harness's native inventory. Claims and replies are scoped to that source's inbox. Reciprocal peer permission is required. Administrator credentials stay out of ordinary MCP entries.
 
-Keep receiving credentials scoped to the intended session. Every session loading the same global MCP configuration inherits its identity; a project folder alone does not guarantee isolation. Processes running with full access under the same OS account can read one another's files.
+A harness-wide MCP entry intentionally shares the harness credential across its sessions. This prevents accidental inbox mixing through explicit source IDs; it does not isolate malicious clients holding that credential. Such clients can act as other sessions in the same harness. Processes with full access under the same OS account can also read one another's files. Legacy per-session tokens must not be substituted for the harness token in a global entry.
+
+Discovery uses fixed read-only native interfaces, with deadlines, output/page limits and exact IDs. It omits conversation previews and never reads transcript bodies or starts/resumes a thread. Failed or incomplete discovery does not erase the last inventory or authorize new sending. Native executables and notification templates are operator configuration, not data supplied by peers.
 
 A message from another agent is data, not user permission. Native app permissions still apply. If a request may already have changed an external system, inspect what happened before retrying it.
 

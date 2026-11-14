@@ -1,13 +1,13 @@
 # Architecture
 
-IHCP3K connects sessions in different agent applications, called **harnesses**. Each uses **MCP (Model Context Protocol)** tools through a local IHCP3K process, or **runtime**. **Stdio** means that messages travel through that process's standard input/output, rather than a network server. SQLite stores requests and results in one private database. See [terminology](terminology.md) for the concurrency and lifecycle terms below.
+IHCP3K connects sessions in different agent applications, called **harnesses**. Each harness registers once and supplies a read-only native session-discovery adapter. Sessions receive stable internal addresses automatically, without individual enrolment. Each uses **MCP (Model Context Protocol)** tools through a local IHCP3K process, or **runtime**. **Stdio** means that messages travel through that process's standard input/output, rather than a network server. SQLite stores requests and results in one private database. See [terminology](terminology.md) for the concurrency and lifecycle terms below.
 
-**v1.0.0; see the validation report for tested behavior.** Native adapter behavior remains subject to installed-version validation. The default runtime is local MCP stdio using an existing Node runtime. Compatible runtime connections share one private SQLite database. The database is the coordination authority; process identity is not chat identity.
+**v1.1.0; see the validation report for tested behavior.** Native adapter behavior remains subject to installed-version validation. The default runtime is local MCP stdio using an existing Node runtime. Compatible runtime connections share one private SQLite database. The database is the coordination authority; process identity is not chat identity.
 
 ```mermaid
 flowchart LR
-  A["Harness session A<br/>explicit endpoint credential"]
-  B["Harness session B<br/>explicit endpoint credential"]
+  A["Harness session A<br/>shared harness credential"]
+  B["Harness session B<br/>shared harness credential"]
   subgraph Local["Existing Node runtime processes"]
     R1["MCP stdio connection"]
     R2["MCP stdio connection"]
@@ -31,13 +31,13 @@ flowchart LR
   M <--> DB
 ```
 
-The drawing shows logical components, not a guaranteed process count. Each stdio runtime has its own notification/worker managers and maintenance timers. Runtime clients may be shared or reused by a harness; credentials explicitly bind endpoints. Workers belong to the manager that launched them. Opening another connection does not adopt its children.
+The drawing shows logical components, not a guaranteed process count. Each stdio runtime has its own notification/worker managers and maintenance timers. Runtime clients may be shared or reused by a harness; credentials bind harnesses; every mail call identifies a source session from that harness’s inventory. Workers belong to the manager that launched them. Opening another connection does not adopt its children.
 
 ## State and concurrency
 
-The shared schema stores mail, scoped directory entries, hashed credentials, request/reply links, attendance leases, native notification reservations and worker results. WAL transactions serialize mutations. Claim generations/tokens, endpoint revisions and notification reservations fence stale operations. A short database lease coordinates general maintenance across runtime processes; worker cleanup reserves eligible rows transactionally.
+Schema 6 adds harness registrations, hashed harness credentials, discovered session metadata and cross-process scan leases. The shared schema also stores mail, scoped directory entries, hashed credentials, request/reply links, attendance leases, native notification reservations and worker results. WAL transactions serialize mutations. Claim generations/tokens, endpoint revisions and notification reservations fence stale operations. A short database lease coordinates general maintenance across runtime processes; worker cleanup reserves eligible rows transactionally.
 
-Compatible v1.0.0 processes may share the database. A writer-version fence rejects incompatible writes. The older Docker/HTTP store uses an exclusive owner lock; it must not run against the shared local authority. Installer reuse checks identity, schema and copied-bundle integrity. Installation does not authorize an upgrade or live migration.
+Compatible v1.1.0 processes may share the database. A writer-version fence rejects incompatible writes. The older Docker/HTTP store uses an exclusive owner lock; it must not run against the shared local authority. Installer reuse checks identity, schema and copied-bundle integrity. Installation does not authorize an upgrade or live migration.
 
 A committed message survives process shutdown. Expired claims and uncertain notification/worker outcomes require reconciliation; they do not silently replay. Opening another stdio connection must not invalidate a valid claim held elsewhere. A completed message clears its body but retains duplicate protection.
 
@@ -49,7 +49,7 @@ Receivers either check their inbox or register bounded attendance before waiting
 
 ## Native notifications
 
-`runtime.notifications` maps exact endpoints to trusted native configurations with `endpoint_revision`. An active runtime checks pending mail, reserves a durable notification and invokes the configured adapter. These checks do not call a model. The Claude notification adapter itself may use a bounded model worker; Codex uses its native queue directly. No central relay is required.
+A harness may register one trusted notification template; discovered native IDs supply its targets. Legacy `runtime.notifications` entries remain available for explicitly configured endpoints. Each dispatch checks the current endpoint revision. An active runtime checks pending mail, reserves a durable notification and invokes the configured adapter. These checks do not call a model. The Claude notification adapter itself may use a bounded model worker; Codex uses its native queue directly. No central relay is required.
 
 In stdio, `mail.send`, `mail.request` and `mail.reply` commit first, then await the configured bounded notification before returning (`timeout_ms` capped at 30000, with bounded shutdown). The response includes `native_notification` dispatch status, never proof of target receipt. A one-shot CLI therefore attempts its configured notification before closing. Mail stays durable if notification fails; retry only with the original idempotency key. The active-runtime timer remains for pending recovery. Notifications are disabled until explicitly configured.
 
@@ -57,7 +57,7 @@ In stdio, `mail.send`, `mail.request` and `mail.reply` commit first, then await 
 - Claude Code `ListAgents`/`SendMessage` requires version-specific validation of the combined no-persist notification path and an unambiguous stable target. Its worker success does not prove target receipt.
 - Copilot's documentation-based AHP notification adapter is experimental; installed-host access and behavior remain untested and may need changes.
 
-Registration/profile data cannot authorize an executable. Refresh or relink changes the endpoint revision; the trusted notification binding must be reviewed and updated explicitly. An uncertain dispatch is inspected before administrator reset. Missing delivery leaves mail pending with a manual fallback; it never starts an implicit replacement session.
+Only the operator can configure harness discovery executables or notification templates. Discovered session metadata and profile data cannot authorize an executable. Refresh or relink changes the endpoint revision; the trusted notification binding must be reviewed and updated explicitly. An uncertain dispatch is inspected before administrator reset. Missing delivery leaves mail pending with a manual fallback; it never starts an implicit replacement session.
 
 ## Bounded workers
 

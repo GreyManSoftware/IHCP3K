@@ -5,10 +5,10 @@ export class Notifications {
  constructor(store,configs={},notify=notifyNative,preflight=buildNativeCommand){this.store=store;this.configs=configs;this.notify=notify;this.preflight=preflight;this.active=new Map();this.stopping=false;}
  async tick(){
    if(this.stopping)return;
-   for(const recipient of Object.keys(this.configs).slice(0,100))this.start(recipient);
+   for(const recipient of [...new Set([...Object.keys(this.configs),...(this.store.harnesses?.notificationRecipients()??[])])].slice(0,100))this.start(recipient);
  }
  start(recipient){
-     const config=this.configs[recipient];
+     const config=this.store.harnesses?.notificationFor(recipient)??this.configs[recipient];
      if(this.stopping||!config)return {status:'unconfigured'};
      if(this.active.has(recipient))return this.active.get(recipient);
      if(!this.store.pending(recipient))return {status:'no_pending_mail'};

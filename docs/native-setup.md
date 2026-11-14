@@ -2,9 +2,13 @@
 
 “Native” here means the agent app's own tools, settings and permission prompts. **MCP (Model Context Protocol)** supplies the IHCP3K tools; **stdio** is the local process connection. An **endpoint** is the session's registered messaging identity. “Scope” describes which sessions inherit a configuration or credential. See [terminology](terminology.md) for supporting terms.
 
-Install and register an endpoint using [onboarding](onboarding.md) first. Keep its receiving credential scoped to the intended session. A global MCP entry with a fixed token gives every session that loads it the same identity; passing that token as an argument or environment variable does not create session isolation.
+Register the harness once using [agent setup](../AGENT_SETUP.md). Install the returned MCP entry in the selected harness-wide scope using `harness.tok`. Its tools accept an exact source `session_id` on each mail operation, so a shared MCP process does not mix conversations. All sessions of that harness share the credential's trust boundary; they are not isolated from malicious clients in the same harness.
 
-Use a per-invocation configuration for a bounded CLI test. For a persistent desktop connection, verify the app's actual configuration scope and reload behavior before installing it. If it cannot isolate receiving identities, do not advertise a global connection as per-session registration. Explicit scoped SDK access is a separate supported client, not evidence that native MCP tools work.
+Use the native app's reliable session metadata to choose the source ID from automatic discovery. Do not infer it from a title, latest activity or process-wide mutable setting. A harness configuration reload may be needed for existing chats; that is not another registration.
+
+The default launch is `<node> <runtime>/bundles/stdio.mjs <runtime>/runtime.json <harness>/harness.tok`. For a bounded test use invocation-only configuration; for the user-approved installation use the app's supported harness-wide configuration. Never expose the installation administrator token in this entry.
+
+Current harness tools are `harness.discover`, `session.status` and the other `session.*` operations. The version-specific observations below used the older per-session tools; they are historical evidence, not a test of the new registration contract.
 
 ## Claude Code
 
@@ -22,12 +26,12 @@ Use an **interactive** first-use check when tools require approval. `codex exec`
 
 Current [official MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) describes `enabled_tools` and per-tool `approval_mode`. A separately approved headless retry using the two raw dotted tool names still failed on the tested build. The cause is unresolved; do not label these settings as a verified unattended recipe, silently broaden the grant, or substitute SDK results for a native pass.
 
-For an interactive inspection, expose only `directory.discover` and `mail.status`, ask for those two calls, and let the user approve them in the native client. This passed on CLI `0.167.0-alpha.4.1`: both tools returned actual results after the user selected **Always allow** separately for each. The native client may persist that choice; record its scope as part of setup and cleanup. The launch itself used invocation-only MCP configuration.
+For an interactive inspection with the historical per-session client, expose only `directory.discover` and `mail.status`, ask for those two calls, and let the user approve them in the native client. This passed on CLI `0.167.0-alpha.4.1`: both tools returned actual results after the user selected **Always allow** separately for each. The native client may persist that choice; record its scope as part of setup and cleanup. The launch itself used invocation-only MCP configuration.
 
 Stop after the results. A server appearing in `/mcp` alone is insufficient. Record the CLI version, exact effective configuration, tool results and any error before proceeding to message-writing permissions. Approval of inspection tools does not approve every mail or worker operation.
 
 ## Other harnesses
 
-Start with their documented MCP stdio configuration and permission flow. Test one isolated endpoint, then reciprocal discovery, correlated requests/replies, reconnect and unlink. Verify native notification separately. Record unsupported operations explicitly. Copilot remains experimental and untested against an installed host; an unknown harness is not supported merely because it claims MCP compatibility.
+Start with their documented MCP stdio configuration and permission flow. First implement and verify native session listing, then test one harness registration, discovery of several sessions, correlated replies and whole-harness unregister. Verify native notification separately. Record unsupported operations explicitly. Copilot remains experimental and untested against an installed host; an unknown harness is not supported merely because it claims MCP compatibility.
 
 Do not remove the current installation until the replacement's required paths have passed and one authority has been selected. See [cutover](cutover.md).

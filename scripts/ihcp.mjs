@@ -56,6 +56,29 @@ export async function main(args=process.argv.slice(2)){
    }finally{fs.closeSync(fd);}
  }
  if(mode==='register'){
+   // One private credential/configuration per harness. Native sessions require no enrolment.
+   const dir=path.resolve(output),details=read(input),requestFile=path.join(dir,'registration.json');
+   let request;
+   if(!fs.existsSync(dir)){
+     privateDir(dir);request={...details,runtime_file:path.resolve(location),credential:randomBytes(32).toString('base64url')};
+     write(requestFile,request);fs.writeFileSync(path.join(dir,'harness.tok'),request.credential+'\n',{flag:'wx',mode:0o600});
+   }else{
+     request=read(requestFile);const {credential,runtime_file,...saved}=request;
+     if(runtime_file!==path.resolve(location)||JSON.stringify(saved)!==JSON.stringify(details))throw Error('REGISTRATION_RETRY_MISMATCH');
+     const stateFile=path.join(dir,'harness.json'),state=fs.existsSync(stateFile)?read(stateFile):null;
+     if(state?.linked===false&&!state.registration_pending){
+       request={...request,credential:randomBytes(32).toString('base64url')};write(requestFile,request);
+       fs.writeFileSync(path.join(dir,'harness.tok'),request.credential+'\n',{mode:0o600});
+       write(stateFile,{...state,registration_pending:true});
+     }
+
+   }
+   const {runtime_file,...payload}=request;
+   const result=await withClient(operatorLocation(location),path.join(path.dirname(location),'tokens','admin.tok'),c=>call(c,'harness.register',payload));
+   write(path.join(dir,'harness.json'),{...result,runtime_file,linked:true});
+   return {...result,harness_dir:dir,mcp:{command:process.execPath,args:[read(location).bundle,runtime_file,path.join(dir,'harness.tok')]}};
+ }
+ if(mode==='register-session'){
    // register <url|runtime.json> <enrolment-file> <profile-and-private-binding.json> <new-session-dir>
    const dir=path.resolve(extra),details=read(output),codeHash=createHash('sha256').update(fs.readFileSync(input,'utf8').trim()).digest('hex');
    const requestFile=path.join(dir,'registration.json');let request;
@@ -74,7 +97,28 @@ export async function main(args=process.argv.slice(2)){
    write(path.join(dir,'session.json'),{...result,...storedConnection(location),linked:true});
    return {...result,session_dir:dir};
  }
- const dir=path.resolve(location),file=path.join(dir,'session.json'),session=read(file);
+ const dir=path.resolve(location),harnessFile=path.join(dir,'harness.json');
+ if(fs.existsSync(harnessFile)){
+   const harness=read(harnessFile);
+   if(mode==='unlink'&&!harness.linked)return {harness:harness.harness,registered:false};
+   if(!harness.linked)throw Error('HARNESS_UNREGISTERED');
+   return withClient(harness.runtime_file,path.join(dir,'harness.tok'),async c=>{
+     if(mode==='discover'||mode==='refresh')return call(c,'harness.discover',{force:mode==='refresh',...(input?read(input):{})});
+     if(mode==='unlink'){const result=await call(c,'harness.unregister',{});write(harnessFile,{...harness,linked:false});return result;}
+     if(['worker','worker-status','worker-ack'].includes(mode)){
+       if(!input)return parseInvocation([mode,'--help']);
+       const {session_id,...payload}=read(input);
+       if(mode==='worker')return runWorker(c,payload,{stdio:true,invoke:(client,name,args)=>call(client,'session.'+name.replace('.','_'),{session_id,...args})});
+       return call(c,mode==='worker-status'?'session.worker_status':'session.worker_ack',{session_id,...payload});
+     }
+     const operations={remote_prompt:'request',check:'claim',status:'status',reply:'reply',send:'send',complete:'complete',renew:'renew',release:'release'};
+     if(!operations[mode])throw Error('MODE_REQUIRES_SESSION_WORKER_CONFIGURATION');
+     if(!input)return parseInvocation([mode,'--help']);
+     const payload=read(input),op=mode==='status'&&payload.id?'request_status':operations[mode];
+     return call(c,'session.'+op,payload);
+   });
+ }
+ const file=path.join(dir,'session.json'),session=read(file);
  if(mode==='unlink'&&!session.linked)return {endpoint:session.endpoint,linked:false};
  if(!session.linked)throw Error('SESSION_UNLINKED');
  return withClient(session.runtime_file??session.url,path.join(dir,'session.tok'),async c=>{

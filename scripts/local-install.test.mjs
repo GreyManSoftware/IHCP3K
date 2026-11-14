@@ -21,7 +21,7 @@ function fixture(t) {
 }
 function editDatabase(file,fn) {
   const db=new DatabaseSync(file);
-  try {db.function('ihcp_writer_version',()=>5);fn(db);}finally{db.close();}
+  try {db.function('ihcp_writer_version',()=>6);fn(db);}finally{db.close();}
 }
 
 test('offline v4 import uses a new identity, revokes credentials and pauses unresolved work',async t=>{
@@ -120,11 +120,11 @@ test('bundled local install, strict reuse and explicit stdio CLI workflow',async
       await assert.rejects(install(dir),/RUNTIME_SCHEMA_MISMATCH/);
       await assert.rejects(connect({runtimeFile,tokenFile}),/RUNTIME_SCHEMA_MISMATCH/);
       assert.deepEqual(fs.readFileSync(runtime.database),oldDatabase);
-    }finally{editDatabase(runtime.database,db=>db.exec('PRAGMA user_version=5'));}
+    }finally{editDatabase(runtime.database,db=>db.exec('PRAGMA user_version=6'));}
     editDatabase(runtime.database,db=>db.prepare("UPDATE metadata SET value='wrong-instance' WHERE key='service_id'").run());
     try{await assert.rejects(install(dir),/SERVICE_IDENTITY_MISMATCH/);}finally{editDatabase(runtime.database,db=>db.prepare("UPDATE metadata SET value=? WHERE key='service_id'").run(runtime.service_id));}
-    editDatabase(runtime.database,db=>db.prepare("UPDATE metadata SET value='6' WHERE key='writer_version'").run());
-    try{await assert.rejects(install(dir),/RUNTIME_WRITER_MISMATCH/);}finally{editDatabase(runtime.database,db=>{db.function('ihcp_writer_version',()=>6);db.prepare("UPDATE metadata SET value='5' WHERE key='writer_version'").run();});}
+    editDatabase(runtime.database,db=>db.prepare("UPDATE metadata SET value='7' WHERE key='writer_version'").run());
+    try{await assert.rejects(install(dir),/RUNTIME_WRITER_MISMATCH/);}finally{editDatabase(runtime.database,db=>{db.function('ihcp_writer_version',()=>7);db.prepare("UPDATE metadata SET value='6' WHERE key='writer_version'").run();});}
     if(process.platform!=='win32'){
       fs.chmodSync(tokenFile,0o644);
       try{await assert.rejects(install(dir),/PRIVATE_PERMISSIONS_REQUIRED/);}finally{fs.chmodSync(tokenFile,0o600);}
@@ -137,7 +137,7 @@ test('bundled local install, strict reuse and explicit stdio CLI workflow',async
   await t.test('connect uses official SDK tools and rejects ambiguous/nonlocal transports',async()=>{
     const client=await connect({runtimeFile,tokenFile});
     try {
-      assert.equal(client.getServerVersion().version,'1.0.0');
+      assert.equal(client.getServerVersion().version,'1.1.0');
       assert.ok((await client.listTools()).tools.some(tool=>tool.name==='directory.enroll'));
       assert.equal((await call(client,'mail.status',{recipient:'bootstrap'})).recipient,'bootstrap');
     }finally{await client.close();}
@@ -145,6 +145,21 @@ test('bundled local install, strict reuse and explicit stdio CLI workflow',async
     await assert.rejects(connect({url:'http://127.0.0.1/mcp',runtimeFile,tokenFile}),/ONE_TRANSPORT_REQUIRED/);
     const wrongToken=path.join(base,'bad.tok');fs.writeFileSync(wrongToken,'x'.repeat(43));
     await assert.rejects(connect({runtimeFile,tokenFile:wrongToken}),/MCP_CONNECT_FAILED/);
+  });
+
+  await t.test('register/unregister manages one reusable harness credential through the packaged MCP server',async()=>{
+    const harnessDir=path.join(base,'harness'),input=path.join(base,'harness-config.json');
+    write(input,{harness:'synthetic-harness',discovery:{type:'codex',executable:process.execPath,cwd:base},profile:{label:'Synthetic',source:'fixture',observed_at:new Date().toISOString(),fresh_for_s:600,models:[],usage:[],wake:{type:'manual',lifetime:'test',closed_app:'unknown',human_fallback:'check'}},peers:[]});
+    const first=await cli(['register',runtimeFile,input,harnessDir]);assert.equal(first.registered,true);
+    const second=await cli(['register',runtimeFile,input,harnessDir]);assert.equal(second.reused,true);
+    assert.equal(fs.existsSync(path.join(harnessDir,'session.tok')),false);assert.equal(fs.existsSync(path.join(harnessDir,'harness.tok')),true);
+    assert.equal((await cli(['unregister',harnessDir])).registered,false);
+    assert.equal((await cli(['unregister',harnessDir])).registered,false);
+    await assert.rejects(cli(['discover',harnessDir]),/HARNESS_UNREGISTERED/);
+    const revoked=fs.readFileSync(path.join(harnessDir,'harness.tok'),'utf8');
+    assert.equal((await cli(['register',runtimeFile,input,harnessDir])).registered,true);
+    assert.notEqual(fs.readFileSync(path.join(harnessDir,'harness.tok'),'utf8'),revoked);
+    await cli(['unregister',harnessDir]);
   });
 
   await t.test('enroll/register/inspect/request/reply operate through the chosen runtime',async()=>{
@@ -155,8 +170,8 @@ test('bundled local install, strict reuse and explicit stdio CLI workflow',async
       const grant=json(endpoint+'-grant',{endpoint,harness:'test',peers:['alice','bob']});
       const enrollment=await cli(['enroll',runtimeFile,grant,code]);assert.equal(enrollment.endpoint,endpoint);
       const profile=json(endpoint+'-profile',{profile:{label:endpoint,source:'synthetic test',observed_at:new Date().toISOString(),fresh_for_s:600,models:[],usage:[],wake:{type:'manual',lifetime:'test only',closed_app:'unknown',human_fallback:'check inbox'}}});
-      assert.equal((await cli(['register',runtimeFile,code,profile,session])).revision,1);
-      assert.equal((await cli(['register',runtimeFile,code,profile,session])).revision,1);
+      assert.equal((await cli(['register-session',runtimeFile,code,profile,session])).revision,1);
+      assert.equal((await cli(['register-session',runtimeFile,code,profile,session])).revision,1);
       assert.equal((await cli(['inspect',runtimeFile,json(endpoint+'-inspect',{endpoint})])).active,true);
       assert.equal(read(path.join(session,'session.json')).runtime_file,runtimeFile);
       sessions[endpoint]=session;

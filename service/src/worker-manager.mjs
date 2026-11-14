@@ -16,7 +16,7 @@ export class WorkerManager {
    check(typeof prompt==='string'&&prompt.length>0&&Buffer.byteLength(prompt)<=65536,'INVALID_PROMPT');
    check(typeof idempotency_key==='string'&&idempotency_key.length>0&&idempotency_key.length<=200,'INVALID_KEY');
    const endpoint=this.store.ownEndpoint(p),config=this.configs[adapter];
-   check(config?.allow_endpoints?.includes(endpoint),'WORKER_NOT_CONFIGURED');
+   check(config?.allow_endpoints?.includes(endpoint)||(p.harness_hash&&config?.allow_harnesses?.includes(p.harness)),'WORKER_NOT_CONFIGURED');
    check(this.preflight(config,'worker',{prompt}).status==='ready','WORKER_CONFIGURATION_UNSUPPORTED');
    const retention=config.retention??{action:'none',hours:0};
    check(['none','archive','delete'].includes(retention.action)&&Number.isFinite(retention.hours)&&retention.hours>=0&&retention.hours<=8760,'INVALID_RETENTION');

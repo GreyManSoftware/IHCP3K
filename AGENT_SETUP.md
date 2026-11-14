@@ -1,133 +1,108 @@
 # Agent setup and operation
 
-For an installing agent: a **harness** is the app running the assistant. IHCP3K exposes tools through **MCP (Model Context Protocol)**. Its default **stdio** connection passes messages through a local process's standard input and output. A registered **endpoint** is a session's IHCP3K address; its **binding** records the actual app, host and session behind that address. The private runtime folder holds the database, configuration and credentials. See the [terminology reference](docs/terminology.md) for other implementation terms.
+Install **IHCP3K 1.1.0** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
 
-This guide installs **IHCP3K 1.0.0** from scratch. It requires no previous session, mailbox or installation. See `docs/validation.md` for measured results and remaining limitations. Native setup and cutover require explicit scope and installed-version validation. Never bypass an app or tool execution denial.
+## First install
 
-## First install: ask before writing
-
-Ask the user to choose the **private runtime folder before creating state**. Record that choice; on relink, show and reuse it unless the user selects migration. Do not infer a destination from the checkout, current directory, another harness or this guide's examples. Keep credentials, native IDs, databases, results and account evidence out of public source. A deliberately selected Git-ignored private subfolder is possible; it must never enter commits or exported artifacts.
-
-Record the user-chosen working folder separately. `--workdir` stores it as `runtime.working_directory`; it defaults to the private folder when that is the same choice. Temporary notification processes run there. The target keeps its own registered working folder; substantive task workers use their separately approved adapter cwd.
-
-Also establish:
-
-- The participating harnesses, actual CLI and desktop-engine versions, host/server ownership and exact native session bindings. Titles are labels, not identities.
-- Selectable models, access and allowance evidence, source and observation date. Inventory interfaces without inference first; keep unknowns unknown.
-- Effective native privileges, permitted peers, executable and working directory, explicit model and bounded execution limits.
-- Worker history: result only/no-persist where supported, or supported native archive/delete with an optional retention period. Explain unavailable choices before enabling a worker.
-- User-chosen shared skill and agent-definition locations and project memory locations. Reuse existing sources; do not make separately edited harness copies.
-
-Keep the inventory in private operator records, with peer-visible observations in the endpoint profile and identity details in its private binding. Registration does not discover these facts automatically. Sessions communicate directly; ordinary prompts remain local.
-
-## Install from a release in a new session
-
-1. Ask where the user wants the source/bundle files and **separate private runtime state**. Neither folder needs to be a previous installation. Do not reuse credentials or earlier session memories.
-2. Download `IHCP3K-1.0.0.zip` and `IHCP3K-1.0.0.zip.sha256` from [the v1.0.0 release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v1.0.0). Verify the ZIP SHA-256 against the checksum before extracting into the chosen code folder. These assets include both runtime bundles; the GitHub-generated source archives do not.
-3. Check existing Node is 24.15+; do not install missing software without following the user's environment policy. With this ZIP, no npm install or Docker build is needed.
-4. From the extracted code folder, run `node scripts/install-local.mjs <chosen-private-directory> --workdir <chosen-working-folder>`. The private directory must be new and its parent must exist. These are explicit absolute paths selected with the user, not literal placeholders.
-5. Follow [onboarding](docs/onboarding.md) to enrol/register each endpoint, then [native setup](docs/native-setup.md) for the harness's scope and first-use approval. Test discovery, correlated mail, notification and unlink. Each receiving identity must remain scoped to its intended session.
-
-For a source checkout without the prebuilt ZIP, use the build instructions below. A new or unknown harness must pass its own capability checks; do not infer support from the Claude–Codex rehearsal. Copilot is experimental and may require changes.
-
-## Prerequisites and install
-
-Use an **already installed Node 24.15+** runtime with the required SQLite support. The runtime checks SQLite 3.51.3+. Do not install Node, SDKs, CLIs or packages on the host. Missing prerequisites are a limitation to report, not permission to install software or select another paid account.
-
-For source builds, `node scripts/dev.mjs prepare` installs dependencies and bundles the official MCP SDK in the pinned Docker image. Dependency and cache binaries stay in named Docker volumes. It produces `service/dist/stdio.mjs` and `service/dist/client.mjs`; there is no host `npm install` step. An already-built local installation does not need Docker running.
-
-After the folder choice, follow [onboarding](docs/onboarding.md):
+1. Ask for a code/bundle folder and a **separate private runtime folder** before writing state. Record the choices. Other harnesses join the same runtime; do not create a second database for them.
+2. Download `IHCP3K-1.1.0.zip` and its `.sha256` file from [the release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v1.1.0). Verify the hash. GitHub source archives do not contain the prebuilt bundles.
+3. Use existing Node 24.15+ (SQLite 3.51.3+). Follow the user's installation policy if prerequisites are missing. The prebuilt ZIP needs no npm install or Docker at runtime. Source builds use pinned Docker via `node scripts/dev.mjs prepare`.
+4. Ask for the working folder used by helper processes, independently of the private folder. Run:
 
 ```sh
-node scripts/install-local.mjs /absolute/private/ihcp --workdir /absolute/chosen/working-folder
+node scripts/install-local.mjs /absolute/private/ihcp --workdir /absolute/chosen/work-folder
 ```
 
-All paths in examples are placeholders. Use the selected absolute path, with an existing parent directory. The installer creates private runtime configuration, credentials, copied bundles and SQLite state. An identical rerun with the same working-folder choice verifies and reuses the installation; it does not upgrade an old database, replace an incomplete installation or repair widened permissions silently. Keep administrator credentials out of model-facing MCP entries.
+All paths are placeholders. Use the user's selected absolute paths; the parent of the private folder must exist. This creates private credentials, configuration and the database, but does not modify native app settings or reconnect another harness. Matching installer reuse is read-only. Older installations need an explicit offline restore/migration, not an in-place overwrite.
 
-The optional [Docker/HTTP deployment](docs/http-v04.md) retains the existing v0.4 feature set. It is not a second authority for the same mail and does not expose the new stdio worker/request capabilities merely because it uses the same source tree.
+## Register one harness
 
-## Register and prepare native configuration
+Record a unique harness instance ID, installed version, exact executable and native account/profile being inventoried. Two computers or separate accounts are distinct harness instances even if both use Codex. Select the permitted peer harness IDs with the user; peer permission must be reciprocal. Record the models available to this harness, their evidence/date, and any observed usage. Model listings do not grant permission to spend or dispatch.
 
-Issue an operator-scoped, one-use enrolment for an exact endpoint and permitted peers. Register with the chosen runtime, private native binding and attributed profile; store separate session and wake credentials. Each receiving session uses its own session credential. See [onboarding](docs/onboarding.md) for commands and retry behavior.
+The supported automatic discovery adapters are:
 
-Emit a native configuration snippet for the user's explicit setup step. Do not write native configuration, broaden permissions, restart an app or create a management chat as an installation side effect. Preserve unrelated native settings and record the scope/name of any entry the user explicitly chooses to install. A saved entry is not proof that a running session loaded it.
+- **Codex:** `codex app-server --stdio`, using read-only `thread/list` with pagination, non-archived threads and state-database-only metadata. It does not read message history or start/resume a thread. Status comes from this inventory connection and is not proof of the desktop session's live status. A deliberately configured `transport:"proxy"` uses the running app-server proxy; there is no silent fallback between routes.
+- **Claude:** `claude agents --json`, listing the interactive/background sessions exposed by that installed CLI. Closed historical chats not exposed by this command are not invented or inferred from transcript files.
+- **Other harnesses:** automatic discovery is not yet implemented. Report the missing adapter; do not present manual per-session registration as a successful harness-wide install. Copilot's earlier experimental notification code does not establish discovery support.
 
-Follow the [native setup checks](docs/native-setup.md). Never put a session's receiving token in a user-global entry and claim other sessions remain isolated. First-use tool approval is separate from filesystem access; prove it under the installed harness rather than requiring a blanket permission bypass.
-
-The stdio launch contract is:
-
-```text
-<existing-node-executable> <private-runtime>/bundles/stdio.mjs <private-runtime>/runtime.json <private-session>/session.tok
-```
-
-Only file paths, never token values, enter the arguments. Example Codex TOML:
-
-```toml
-[mcp_servers.ihcp]
-command = "/absolute/path/to/node"
-args = ["/absolute/private/ihcp/bundles/stdio.mjs", "/absolute/private/ihcp/runtime.json", "/absolute/private/session/session.tok"]
-cwd = "/absolute/private/ihcp"
-startup_timeout_sec = 15
-tool_timeout_sec = 45
-```
-
-Example Claude Code entry inside its supported `mcpServers` configuration:
+Prepare a private configuration (replace every placeholder):
 
 ```json
 {
-  "ihcp": {
-    "type": "stdio",
-    "command": "/absolute/path/to/node",
-    "args": ["/absolute/private/ihcp/bundles/stdio.mjs", "/absolute/private/ihcp/runtime.json", "/absolute/private/session/session.tok"],
-    "cwd": "/absolute/private/ihcp"
+  "harness": "codex-local",
+  "peers": ["claude-local"],
+  "discovery": {
+    "type": "codex",
+    "executable": "/absolute/path/to/codex",
+    "cwd": "/absolute/chosen/work-folder",
+    "timeout_ms": 15000,
+    "max_sessions": 10000
+  },
+  "profile": {
+    "label": "Codex on this computer",
+    "source": "Installed native interfaces checked during setup",
+    "observed_at": "2026-01-01T00:00:00Z",
+    "fresh_for_s": 3600,
+    "models": [],
+    "usage": [],
+    "wake": {
+      "type": "manual",
+      "lifetime": "Until a notification adapter is validated",
+      "closed_app": "unknown",
+      "human_fallback": "Open the target and check its inbox"
+    }
   }
 }
 ```
 
-Verify the installed client's schema, scope, executable trust and actual tools. Desktop Code and CLI versions/configuration can differ. Do not apply Code-session guarantees to ordinary consumer chats. MCP process ownership is harness-dependent: one process is not necessarily one chat. Scope credentials accordingly and verify concurrent-session bindings before enabling delivery.
-
-For an authorized operation without native tools, use the bundled SDK client against the same runtime:
+Use the real observation time. Obtain model and usage field definitions from [the protocol](docs/protocol.md); preserve unknowns rather than invent entitlements. For Claude use `type:"claude"` and its installed executable. Executables must be absolute paths, not shell wrappers or commands supplied by another agent.
 
 ```sh
-node service/dist/client.mjs /absolute/private/ihcp/runtime.json /absolute/private/session/session.tok mail.status /absolute/private/status.json
+node scripts/ihcp.mjs register /absolute/private/ihcp/runtime.json /absolute/private/codex-config.json /absolute/private/codex
 ```
 
-The input contains `{"recipient":"alpha-main"}`. Claim output includes private bodies and claim tokens. A denied native action must not be retried through the helper to evade policy.
+The operator credential authorizes this one registration. The result includes a native MCP launch configuration; the harness folder contains `harness.json`, private retry data and `harness.tok`. Registration immediately attempts a native inventory and returns its status separately. A discovery error means setup is not complete even though the credential was stored; fix the adapter and refresh. An identical retry reuses the registration. Changed settings require explicit review/re-registration, not silent overwrite. Do not expose the administrator credential to ordinary sessions.
 
-## Requests, notifications and workers
+## Connect the harness once
 
-Use `mail.request`, `mail.reply` and `mail.request_status` for correlated requests. The service derives the return endpoint from the requester's credential; claimed replies identify the original request. `ihcp.mjs remote_prompt` sends a durable request and returns its ID, without waiting for completion or creating a worker. `mail.send` remains available for ordinary asynchronous messages.
+Install the returned MCP configuration in the **chosen harness-wide scope**, after reviewing the actual app's supported settings and obtaining any required native approval. Preserve other servers. The launch is:
 
-Claim only your own inbox, verify current user authority, renew while working and complete with the current generation/token. Release unstarted work with `work_started:false`; possible effects require reconciliation. A message, catalogue entry or native notification is not permission to execute.
+```text
+<existing-node> <private-runtime>/bundles/stdio.mjs <private-runtime>/runtime.json <private-harness>/harness.tok
+```
 
-Configure notifications separately in trusted `runtime.notifications`, keyed by endpoint and fenced by `endpoint_revision`. An active runtime checks configured inboxes without AI polling or a central relay. Codex uses its native queue; Claude may use a bounded, validated native messaging worker. A queue acknowledgement is not consumption. Failed or ambiguous delivery must remain visible, never become an implicit replacement session. See [native adapters](docs/native-adapters.md).
+The token intentionally authorizes the harness, not one chat. Every mail operation supplies its exact source `session_id`; the server checks that it belongs to this harness's discovered inventory. Never set a connection-wide “current session”, because multiple chats can share one MCP process. Never put one per-session credential into the global entry.
 
-In stdio, `mail.send`, `mail.request` and `mail.reply` commit first, then await the configured bounded notification before returning (`timeout_ms` capped at 30000, with bounded shutdown). The response includes `native_notification` dispatch status, never proof of target receipt. A one-shot CLI therefore attempts its configured notification before closing. Mail stays durable if notification fails; retry only with the original idempotency key. The active-runtime timer remains for pending recovery. Notifications are disabled until explicitly configured.
+Use the app's reliable current-session metadata to identify the caller. Match an exact native ID from discovery, not a title or the most recently active chat. If the app cannot expose its current ID, ask the user to choose the source from the discovered sessions. This selects an identity; it is not another registration. Same-harness clients share trust and can act as that harness's sessions; this is not isolation against malicious clients using the same credential or OS account.
 
-`worker.start/status/wait/ack` operate only on configured `runtime.workers` adapters with `allow_endpoints`. Callers cannot supply their own executable or override native privileges. Use `ihcp.mjs worker` for the CLI workflow: it keeps the stdio connection open until the result or its wait limit. A one-shot `worker.start` call followed by closing that connection aborts its owned child; it does not detach a job. Inspect and preserve the result before explicit acknowledgement.
+Existing chats may need a native configuration reload. Do not restart apps or broaden permissions silently. New chats use the same harness configuration and need no new IHCP3K token or enrolment.
 
-For active inbox waits, register `mail.attend` before sending, use bounded `mail.wait`, and release with `mail.unattend` in cleanup. Attendance lasts at most 120 seconds and must not be renewed after ending a turn. It suppresses only new message notifications, and returned mail can be unrelated. The legacy `exchange` helper uses ordinary `mail.send`, not the new correlation protocol.
+## Discovery, requests and replies
 
-## Retention and process ownership
+Call `harness.discover` or `node scripts/ihcp.mjs discover <harness-dir>`. It refreshes the permitted harness inventories, returning stable session addresses, native IDs, labels, working folders and observed state. Successful snapshots are cached for 15 seconds; `/refresh` forces a rescan. Discovery and outgoing requests trigger refresh; there is no AI polling or permanently installed discovery service.
 
-Prefer native no-persist for result-only workers when supported by the validated version. Native history, durable protocol results, process lifetime, worktrees, artifacts, logs and backups are distinct. No-persist and native delete do not promise zero residue or remote erasure.
+A complete successful scan adds new sessions and disables missing ones. Failed or partial scans retain the last inventory with an explicit error/stale flag; they do not authorize sending against that failed scan. A label is for display, not routing. Use the exact returned address.
 
-This version implements archive/delete only for persisted **Codex workers**, with explicit cleanup permission. Cleanup needs an acknowledged durable successful result, verified child exit and the exact owned worker ID. Retain failed, active or uncertain jobs for reconciliation. Never target the requester/recipient session, delete raw transcripts or use a project-wide purge for worker cleanup. Observing the immediate child exit does not prove every descendant or remote task stopped.
+For a request, call `session.request` with `session_id`, `recipient`, `body`, and a stable `idempotency_key`. The source ID may be its native ID or its discovered address; the destination must be the exact discovered address. The returned request ID tracks the reply. Receivers use `session.claim`, `session.reply` and `session.complete`, always identifying their own source session. Help for every CLI mode is available with `--help`; see [usage](docs/usage.md).
 
-A retention period records a terminal action and due time. Cleanup is opportunistic while a runtime is active, or on later activity; N hours is not an exact execution deadline. There is no implicitly installed scheduler or daemon. Worker result records are not automatically erased by native cleanup.
+Do not send work just because a model or session appears in discovery. User authorization, selected model and native permissions still apply.
 
-## Validation, migration and recovery
+## Notifications and optional workers
 
-Record measured results separately from interface inspection or documentation claims. Before advertising support, verify scope denial, duplicate/conflicting requests, correlated replies, reconnect/concurrent stdio behavior, worker cancellation/exit, and installed-version idle/busy/unavailable target delivery. See [validation](docs/validation.md). Do not run real work merely to probe capabilities.
+Registration/discovery does not prove that a receiving chat has read a message. Configure and validate notifications **once per harness**. An optional top-level `notification` template in the registration configuration is inherited by discovered sessions, with exact native IDs filled by the service; users do not register notification targets individually.
 
-Installation and migration are separate operations. The optional `install-local.mjs <new-private-directory> <offline-backup.db> <sha256> [--workdir <chosen-working-folder>]` form restores a verified offline snapshot into a new private root with fresh service identity, revoked registered credentials, disabled endpoints and paused unresolved mail. It does not modify the source, configure native clients, unpause mail or switch live authority. Freeze old writers, take a consistent offline snapshot/backup, reconcile uncertain effects, then choose one authority explicitly. Do not point old HTTP and new stdio runtimes at the same live database or dual-write two copies. See [migration](docs/migration.md) and [cutover](docs/cutover.md). The local installer does not create backups or perform live cutover.
+For Codex the template is `{"enabled":true,"type":"codex-queue"}`. For Claude it is a validated `claude-message` template with explicit model, `verified:true` and bounded turns. The Claude route must support the exact IDs returned by `agents --json`; older short-reference-only native listings may fail to match. Never set `verified:true` without checking the installed route. Missing/ambiguous targets leave mail pending; do not substitute a new chat or a title match. See [native adapters](docs/native-adapters.md).
 
-Keep current state when restoring: newer messages/effects must be reconciled against a separate restored copy. Restored credentials require explicit relink. Never auto-fallback to a retired file mailbox. Backups have a separate retention choice and may retain old bodies.
+Explicit task workers remain optional. Configure trusted executable/model/limits and `allow_harnesses:["codex-local"]` for harness-wide permission, or a narrower `allow_endpoints` list. Use the `session.worker_*` tools or CLI `worker` with `session_id` in its input. The owning connection must remain open; shutdown cancels owned workers. Review and acknowledge successful results before configured cleanup. Native cleanup is currently implemented only for opted-in persisted Codex workers, with verified exit and exact identity. No guarantees of zero logs or secure erasure.
 
-## Unknown harnesses and shared knowledge
+## Unregister and test
 
-Negotiate capabilities per version and surface: MCP transport, credential scope, stable session/host identity, native notification, worker execution, cancellation, process ownership, persistence and cleanup. Label evidence as observed, documented-only, unsupported or unknown. Inspect native interfaces before using inference. Do not infer a live adapter from documented APIs alone.
+`/unregister <harness>` invokes `harness.unregister`: it revokes the harness credential and every discovered session address atomically, without deleting shared messages or other harnesses. The agent then removes only that harness's recorded IHCP3K native settings using its supported settings mechanism. Resolve active work and stop only verified owned helpers; report any incomplete settings removal. Relinking restores the stable session addresses: retained pending mail becomes available again, while uncertain claims remain for review. Inspect retained work before re-enabling notifications or handling requests.
 
-Unknown harnesses start with scoped mail and manual checks. If live delivery cannot be established, leave durable mail pending with its limitation or return an explicit manual handoff. A new worker is a separate choice. Copilot is experimental. A documentation-based AHP notification adapter now exists, but actual installed-host access and behavior are untested and may need changes; manual fallback remains required when it cannot validate the target.
+Before calling setup complete, test: register once; discover multiple sessions; create another native session and discover it without registering again; exchange a harmless correlated request/reply between two sessions; confirm replies cannot be claimed using another source session; unregister one harness and confirm the other still works. Native configuration, notifications and full app behavior require their own observations. See [validation](docs/validation.md).
 
-Keep shared skills, agent definitions and project memory in user-chosen locations. Native adapters reference those sources; IHCP3K does not sync them, duplicate memory or replicate sessions. Handovers require a checkpoint, source stop, destination verification and explicit acceptance. Peer silence never transfers ownership.
+## Shared knowledge and unknown harnesses
+
+Keep one user-chosen shared source for skills/agent definitions and project-scoped memory. IHCP3K does not copy chat history or merge memories. A handover requires a checkpoint, source stop and destination acceptance.
+
+For an unknown harness, implement and test a bounded read-only session-discovery adapter first, including stable IDs, pagination, disappearance, failure handling and account/host scope. Then validate native MCP configuration, source-session identity, notification and permissions. Do not promise support based solely on an advertised MCP interface or silently fall back to manual session enrolment.

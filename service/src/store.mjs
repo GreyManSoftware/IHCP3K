@@ -33,13 +33,13 @@ export class Store extends EventEmitter {
     try {
     this.db = new DatabaseSync(filename);
     this.db.exec('PRAGMA busy_timeout=5000;');
-    if(shared)this.db.function('ihcp_writer_version',()=>5);
+    if(shared)this.db.function('ihcp_writer_version',()=>6);
     const version = this.db.prepare('select sqlite_version() as v').get().v;
     const [major, minor, patch] = version.split('.').map(Number);
     requireThat(major > 3 || (major === 3 && (minor > 51 || minor === 51 && patch >= 3)), 'SQLITE_VERSION_UNSUPPORTED');
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
     const schema = this.db.prepare('PRAGMA user_version').get().user_version;
-    requireThat(schema >= 0 && schema <= (shared?5:4), 'SCHEMA_VERSION_UNSUPPORTED');
+    requireThat(schema >= 0 && schema <= (shared?6:4), 'SCHEMA_VERSION_UNSUPPORTED');
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY, sender TEXT NOT NULL, recipient TEXT NOT NULL,
