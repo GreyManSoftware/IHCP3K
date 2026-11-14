@@ -42,7 +42,7 @@ You choose when to delegate. Ordinary prompts stay local; IHCP3K doesn't silentl
 
 Give your assistant this prompt:
 
-> Set up IHCP3K using https://github.com/GreyManSoftware/IHCP3K/blob/master/AGENT_SETUP.md. Ask me where to store its private working data, then help me connect my coding assistants and test a request and reply.
+> Set up IHCP3K using https://github.com/GreyManSoftware/IHCP3K/blob/master/AGENT_SETUP.md. Ask me where the files should be saved, then help me connect my coding assistants and test a request and reply.
 
 The prebuilt release needs an existing Node 24.15+ installation. Docker isn't needed to run it.
 

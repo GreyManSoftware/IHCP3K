@@ -10,10 +10,10 @@ This is an explicit offline operation, separate from normal installation and liv
 
 1. Agree a single migration owner and barrier; stop every source writer/consumer, including old HTTP and any stdio connections. Record the source version and consistent backup identity privately.
 2. Obtain a verified SQLite snapshot/backup including committed WAL data and its SHA-256. Copying only a running `.db` file is not a consistent backup. Preserve the source and evidence unchanged.
-3. Ask for a new private destination and the working folder used by temporary notification processes. Restore with the explicit backup arguments:
+3. Ask where the restored files should be saved. Derive a new `data/` destination inside that folder; helper processes use it too. Restore with the explicit backup arguments:
 
 ```sh
-node scripts/install-local.mjs /absolute/private/new-ihcp /absolute/private/offline-backup.db <sha256> --workdir /absolute/chosen/working-folder
+node scripts/install-local.mjs /absolute/private/new-ihcp /absolute/private/offline-backup.db <sha256>
 ```
 
 The backup path is absolute and `<sha256>` is the verified 64-character lowercase digest, not literal placeholder text. The destination must be new; ordinary installer reuse cannot import into an existing runtime. The source backup must already be a stable standalone snapshot.

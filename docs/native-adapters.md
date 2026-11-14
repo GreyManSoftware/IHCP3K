@@ -20,7 +20,7 @@ Only operator-owned `runtime.json` selects executables, working directories, mod
 
 For process-based adapters, common fields are `enabled:true`, `type`, absolute `executable`, absolute `cwd`, explicit `model`, `permissions:"read-only"`, `persist`, `timeout_ms`, `max_output_bytes`, `kill_grace_ms` and `max_turns`. A worker prompt does not override them. Configured limits bound the process, not every possible remote effect.
 
-**Notification cwd is the user-chosen working folder (`runtime.working_directory`).** The installer records it with `--workdir`, defaulting to the private folder when that is the same choice. The stdio runtime forces notification configs to that cwd; an adapter entry cannot change it. A temporary notification process runs there. The target continues in its own registered working folder; notification does not rewrite it. An explicitly requested task worker has its separately approved cwd.
+**Notification cwd defaults to the installation’s private `data/` folder (`runtime.working_directory`).** The agent uses that default without asking another folder question. `--workdir` remains an advanced override for an explicitly requested custom setup. The stdio runtime forces notification configs to that cwd; an adapter entry cannot change it. A temporary notification process runs there. The target continues in its own registered working folder; notification does not rewrite it. An explicitly requested task worker has its separately approved cwd.
 
 ## Notifications
 

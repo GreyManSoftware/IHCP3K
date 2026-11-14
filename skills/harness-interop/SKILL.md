@@ -17,7 +17,7 @@ Remote-prompt help can call read-only native discovery through `harness.discover
 
 ## Register the harness once
 
-Ask for the private runtime folder before first writes and reuse its recorded path thereafter. Other harnesses join the same database. Code/bundles and private working data are separate choices. Respect the user's software-installation rules; source dependencies and bundling use pinned Docker, while the prebuilt release needs only existing Node 24.15+.
+Ask only “Where should the files be saved?” for location setup, unless the user already supplied it. Choose the internal layout yourself: `app/` for release files, `data/` for the private runtime, and `data/harnesses/<harness-id>/` for credentials. Helpers use `data/` by default. Do not ask separate layout, code, database or helper-folder questions. Reuse the recorded installation when other harnesses join. Respect the user's software-installation rules; source dependencies and bundling use pinned Docker, while the prebuilt release needs only existing Node 24.15+.
 
 Use the operator's one-time setup authority to register the harness and its permitted peer harness IDs. Registering each chat separately is not an acceptable substitute. The CLI `register <runtime.json> <config.json> <harness-dir>` creates a harness credential, private retry data and a native MCP configuration. Preserve administrator credentials outside ordinary tool configuration. Apply only the exact approved harness-wide MCP entry; preserve other settings and use native permission/reload flows.
 

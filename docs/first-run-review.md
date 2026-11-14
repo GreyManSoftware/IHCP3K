@@ -2,7 +2,7 @@
 
 Start with [agent setup](../AGENT_SETUP.md). The assistant should guide the user through these choices rather than expect knowledge of earlier installations.
 
-1. **Choose folders.** Keep the code separate from the private database and credentials. Record the working folder for temporary notification processes too.
+1. **Choose one folder.** The assistant asks “Where should the files be saved?” and handles the layout inside it. Later harnesses reuse that installation.
 2. **Identify the harnesses.** Record the actual app versions and session IDs. A chat title alone may not uniquely identify a session. Record available models, permissions and the date each observation was made.
 3. **Register and connect once per harness.** Grant reciprocal permission to peer harnesses. Automatically discover the native sessions; do not enrol them individually. Prepare the app's MCP (Model Context Protocol) settings in the chosen scope, then verify that the running session actually loads the tools.
 4. **Try a harmless exchange.** Discover the other session, send a question, and match its reply to that request. Test notifications separately: queuing a notification does not prove the recipient read it.

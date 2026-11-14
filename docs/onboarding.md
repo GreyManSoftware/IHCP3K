@@ -2,7 +2,7 @@
 
 Register each agent application once. Existing and future sessions appear through its native listing interface; they do not need individual tokens, grants or setup folders.
 
-Follow [agent setup](../AGENT_SETUP.md) to choose the shared private runtime, prepare the harness's private configuration and native MCP entry. MCP (Model Context Protocol) is how the app calls IHCP3K tools.
+Follow [agent setup](../AGENT_SETUP.md) to choose one folder for the files. The agent arranges the files inside it and prepares the harness's private configuration and native MCP entry. MCP (Model Context Protocol) is how the app calls IHCP3K tools.
 
 ## Register
 
@@ -12,7 +12,7 @@ node scripts/ihcp.mjs discover /absolute/private/codex
 node scripts/ihcp.mjs refresh /absolute/private/codex
 ```
 
-The first command requires the installation's operator credential and creates one harness credential. Discovery lists permitted harnesses and automatically creates stable addresses for their visible sessions. `refresh` forces a native rescan; ordinary discovery reuses a successful snapshot for up to 15 seconds. CLI paths are placeholders; the user chooses them.
+The first command requires the installation's operator credential and creates one harness credential. Discovery lists permitted harnesses and automatically creates stable addresses for their visible sessions. `refresh` forces a native rescan; ordinary discovery reuses a successful snapshot for up to 15 seconds. CLI paths are placeholders derived by the agent from the one selected installation folder.
 
 Codex uses paginated, read-only `thread/list`. Claude uses `agents --json`. Only sessions exposed by the configured native account/host are visible. A fresh inventory connection's `notLoaded` status does not establish whether a desktop chat is active. Unknown harnesses need a discovery adapter before registration can claim this behavior.
 

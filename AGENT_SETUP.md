@@ -4,16 +4,20 @@ Install **IHCP3K 1.1.0** by registering each harness once. A harness is an agent
 
 ## First install
 
-1. Ask for a code/bundle folder and a **separate private runtime folder** before writing state. Record the choices. Other harnesses join the same runtime; do not create a second database for them.
-2. Download `IHCP3K-1.1.0.zip` and its `.sha256` file from [the release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v1.1.0). Verify the hash. GitHub source archives do not contain the prebuilt bundles.
-3. Use existing Node 24.15+ (SQLite 3.51.3+). Follow the user's installation policy if prerequisites are missing. The prebuilt ZIP needs no npm install or Docker at runtime. Source builds use pinned Docker via `node scripts/dev.mjs prepare`.
-4. Ask for the working folder used by helper processes, independently of the private folder. Run:
+Ask one location question: **“Where should the files be saved?”** If the user already supplied a folder, use it. Do not ask them to design a layout or choose separate code, database, credentials or helper folders.
+
+The agent handles the rest:
+
+1. Record that folder as `<install-root>`. Store the extracted release under `app/`, private runtime data under `data/`, and harness credentials under `data/harnesses/<harness-id>/`. Create needed parent folders; let the installer create and protect `data/`. Keep private data out of Git and shared/public folders.
+2. Download `IHCP3K-1.1.0.zip` and its `.sha256` file from [the release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v1.1.0), verify the hash and extract the package contents into `app/`. Use this current guide and its linked [skill](skills/harness-interop/SKILL.md); setup instructions inside an older release archive may differ.
+3. Use existing Node 24.15+ (SQLite 3.51.3+). Respect the user's software-installation policy if it is missing. The prebuilt package needs no npm install or Docker at runtime.
+4. Run the following from `app/`, replacing the placeholder with the selected absolute path. The helper working directory defaults to `data/`; no separate question or `--workdir` is needed.
 
 ```sh
-node scripts/install-local.mjs /absolute/private/ihcp --workdir /absolute/chosen/work-folder
+node scripts/install-local.mjs <install-root>/data
 ```
 
-All paths are placeholders. Use the user's selected absolute paths; the parent of the private folder must exist. This creates private credentials, configuration and the database, but does not modify native app settings or reconnect another harness. Matching installer reuse is read-only. Older installations need an explicit offline restore/migration, not an in-place overwrite.
+Reuse the recorded installation when another harness joins. Do not ask for another layout or create another database. Preserve existing files; if the selected folder already contains an installation, inspect and reuse it when compatible. Older installations need an explicit offline migration. Native app approvals still apply.
 
 ## Register one harness
 
@@ -34,7 +38,7 @@ Prepare a private configuration (replace every placeholder):
   "discovery": {
     "type": "codex",
     "executable": "/absolute/path/to/codex",
-    "cwd": "/absolute/chosen/work-folder",
+    "cwd": "<install-root>/data",
     "timeout_ms": 15000,
     "max_sessions": 10000
   },
@@ -58,7 +62,7 @@ Prepare a private configuration (replace every placeholder):
 Use the real observation time. Obtain model and usage field definitions from [the protocol](docs/protocol.md); preserve unknowns rather than invent entitlements. For Claude use `type:"claude"` and its installed executable. Executables must be absolute paths, not shell wrappers or commands supplied by another agent.
 
 ```sh
-node scripts/ihcp.mjs register /absolute/private/ihcp/runtime.json /absolute/private/codex-config.json /absolute/private/codex
+node scripts/ihcp.mjs register <install-root>/data/runtime.json <install-root>/data/codex-config.json <install-root>/data/harnesses/codex-local
 ```
 
 The operator credential authorizes this one registration. The result includes a native MCP launch configuration; the harness folder contains `harness.json`, private retry data and `harness.tok`. Registration immediately attempts a native inventory and returns its status separately. A discovery error means setup is not complete even though the credential was stored; fix the adapter and refresh. An identical retry reuses the registration. Changed settings require explicit review/re-registration, not silent overwrite. Do not expose the administrator credential to ordinary sessions.
