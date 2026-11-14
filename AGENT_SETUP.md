@@ -21,7 +21,9 @@ Reuse the recorded installation when another harness joins. Do not ask for anoth
 
 ## Register one harness
 
-Record a unique harness instance ID, installed version, exact executable and native account/profile being inventoried. Two computers or separate accounts are distinct harness instances even if both use Codex. Omit `peers` in normal registration: reciprocal access to existing and future registered harnesses in this installation is automatic. Preserve any explicitly configured restrictions in an existing installation; do not silently broaden them. Record the models available to this harness, their evidence/date, and any observed usage. Model listings do not grant permission to spend or dispatch.
+Default to the harness name for display: **Claude**, **Codex**, or **GitHub Copilot**. Use the corresponding lowercase machine ID (`claude`, `codex`, `github-copilot`); do not add `-local` by default. Only add a meaningful account or device qualifier when another instance of the same harness already exists. Choose it automatically from known metadata, without adding a setup question.
+
+Record that unique harness instance ID, installed version, exact executable and native account/profile being inventoried. Two computers or separate accounts are distinct harness instances even if both use Codex. Omit `peers` in normal registration: reciprocal access to existing and future registered harnesses in this installation is automatic. Preserve any explicitly configured restrictions in an existing installation; do not silently broaden them. Record the models available to this harness, their evidence/date, and any observed usage. Model listings do not grant permission to spend or dispatch.
 
 The supported automatic discovery adapters are:
 
@@ -33,7 +35,7 @@ Prepare a private configuration (replace every placeholder):
 
 ```json
 {
-  "harness": "codex-local",
+  "harness": "codex",
   "discovery": {
     "type": "codex",
     "executable": "/absolute/path/to/codex",
@@ -42,7 +44,7 @@ Prepare a private configuration (replace every placeholder):
     "max_sessions": 10000
   },
   "profile": {
-    "label": "Codex on this computer",
+    "label": "Codex",
     "source": "Installed native interfaces checked during setup",
     "observed_at": "2026-01-01T00:00:00Z",
     "fresh_for_s": 3600,
@@ -61,7 +63,7 @@ Prepare a private configuration (replace every placeholder):
 Use the real observation time. Obtain model and usage field definitions from [the protocol](docs/protocol.md); preserve unknowns rather than invent entitlements. For Claude use `type:"claude"` and its installed executable. Executables must be absolute paths, not shell wrappers or commands supplied by another agent.
 
 ```sh
-node scripts/ihcp.mjs register <install-root>/data/runtime.json <install-root>/data/codex-config.json <install-root>/data/harnesses/codex-local
+node scripts/ihcp.mjs register <install-root>/data/runtime.json <install-root>/data/codex-config.json <install-root>/data/harnesses/codex
 ```
 
 The operator credential authorizes this one registration. The result includes a native MCP launch configuration; the harness folder contains `harness.json`, private retry data and `harness.tok`. Registration immediately attempts a native inventory and returns its status separately. A discovery error means setup is not complete even though the credential was stored; fix the adapter and refresh. An identical retry reuses the registration. Changed settings require explicit review/re-registration, not silent overwrite. Do not expose the administrator credential to ordinary sessions.
@@ -100,7 +102,7 @@ Codex registration defaults to `{"enabled":true,"type":"codex-queue"}`. Claude r
 
 **Notifications are part of setup, not an optional extra.** Test a harmless request and reply while each receiving chat is idle, without asking either user to check an inbox. Record native queuing separately from the receiving chat actually claiming and answering. Do not call the install complete with disabled, unconfigured or untested notifications. If native access is blocked, report setup as incomplete and the exact blocker; preserve the pending message. Closed-app delivery is a separate capability and must not be promised without proof.
 
-Explicit task workers remain optional. Configure trusted executable/model/limits and `allow_harnesses:["codex-local"]` for harness-wide permission, or a narrower `allow_endpoints` list. Use the `session.worker_*` tools or CLI `worker` with `session_id` in its input. The owning connection must remain open; shutdown cancels owned workers. Review and acknowledge successful results before configured cleanup. Native cleanup is currently implemented only for opted-in persisted Codex workers, with verified exit and exact identity. No guarantees of zero logs or secure erasure.
+Explicit task workers remain optional. Configure trusted executable/model/limits and `allow_harnesses:["codex"]` for harness-wide permission, or a narrower `allow_endpoints` list. Use the `session.worker_*` tools or CLI `worker` with `session_id` in its input. The owning connection must remain open; shutdown cancels owned workers. Review and acknowledge successful results before configured cleanup. Native cleanup is currently implemented only for opted-in persisted Codex workers, with verified exit and exact identity. No guarantees of zero logs or secure erasure.
 
 ## Unregister and test
 
