@@ -38,6 +38,11 @@ test('sender, waiter and foreign inbox principals cannot claim',t=>{
   const {store}=fixture(t);store.send(sender,msg);
   for(const principal of [sender,waiter,{...pa,recipients:['b']}])assert.throws(()=>store.claim(principal,{recipient:'a',handler_id:'bad'}),/FORBIDDEN/);
   assert.throws(()=>store.send(pa,msg),/FORBIDDEN/);
+  const scoped={id:'scoped-pa',permissions:['send','claim'],scopes:{send:['b'],claim:['a']}};
+  store.send(scoped,{...msg,recipient:'b'});
+  assert.throws(()=>store.claim(scoped,{recipient:'b',handler_id:'wrong'}),/FORBIDDEN/);
+  assert.throws(()=>store.send(scoped,msg),/FORBIDDEN/);
+  assert.equal(store.claim(scoped,{recipient:'a',handler_id:'own'})[0].body,msg.body);
 });
 test('release fences old claim, and expired/started work requires reconciliation',t=>{
   const {store,advance}=fixture(t);store.send(sender,msg);
@@ -107,6 +112,29 @@ test('notification attempts are persisted and throttled; freshness expires hones
   advance(30000);assert.equal((await store.wait(waiter,{recipient:'a',timeout_ms:0})).status,'pending');
   assert.equal(store.db.prepare('SELECT notification_attempts AS n FROM outbox').get().n,2);
   advance(60001);assert.equal(store.delivery('a'),'pending_without_wake');
+});
+
+test('native doorbell reservations coalesce, fence stale results and require uncertainty review',t=>{
+  const {store,advance}=fixture(t);store.send(sender,msg);
+  const first=store.reserveWake(waiter,{recipient:'a'});
+  assert.equal(first.reserved,true);
+  assert.equal(store.reserveWake(waiter,{recipient:'a'}).reserved,false);
+  store.recordWake(waiter,{...first,result:'queued'});
+  assert.equal(store.recordWake(waiter,{...first,result:'queued'}).duplicate,true);
+  store.send(sender,{...msg,idempotency_key:'second'});
+  assert.equal(store.reserveWake(waiter,{recipient:'a'}).reserved,false);
+  take(store);
+  assert.throws(()=>store.recordWake(waiter,{...first,result:'queued'}),/STALE_WAKE/);
+  const second=store.reserveWake(waiter,{recipient:'a'}); // no pending after claiming the batch
+  assert.equal(second.reserved,false);
+  store.send(sender,{...msg,idempotency_key:'third'});
+  const third=store.reserveWake(waiter,{recipient:'a'});advance(60000);store.maintain();
+  assert.equal(store.reserveWake(waiter,{recipient:'a'}).state,'uncertain');
+  assert.throws(()=>store.recordWake(waiter,{...third,result:'queued'}),/STALE_WAKE/);
+  assert.throws(()=>store.resetWake(waiter,{recipient:'a',expected_generation:third.generation,reason:'no'}),/FORBIDDEN/);
+  store.resetWake(admin,{recipient:'a',expected_generation:third.generation,reason:'Native queue inspected; no pending doorbell'});
+  const retry=store.reserveWake(waiter,{recipient:'a'});assert.equal(retry.reserved,true);
+  assert.ok(retry.generation>third.generation);
 });
 test('capacity, byte size and recipient validation reject without dropping existing work',t=>{
   const {store}=fixture(t,{maxPending:1});store.send(sender,msg);

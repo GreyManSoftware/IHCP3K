@@ -14,13 +14,13 @@ flowchart LR
   K[Canonical skills and memory] -. versioned references .-> S
 ```
 
-Solid edges describe the service/client prototype; native model-turn wake and knowledge integration require further validation. The service's timer performs maintenance without AI inference. A separate SQLite ownership lock prevents a second service writer and is released when the owning process exits.
+Solid edges describe the service and clients. Native wake depends on the harness; knowledge and ownership integration remain future work. The service's timer performs maintenance without AI inference. A separate SQLite ownership lock prevents a second service writer and is released when the owning process exits.
 
 ## Delivery and ownership
 
 Messages and notification state commit together. Sender-scoped idempotency keys reject conflicting payloads. Claims carry a generation, opaque token and deadline. Completing or releasing a stale claim fails. Process restart and claim expiry send uncertain work to reconciliation instead of automatically repeating it.
 
-Delivery is at least once with duplicate protection. Native enqueue success, model receipt and completed work are separate outcomes. The current outbox records notification hints and attempt counts; it is not yet a full native-dispatch recovery engine.
+Native enqueue success, model receipt and completed work are separate outcomes. The outbox records notification hints and attempt counts. A separate fenced reservation coalesces Codex queue notifications and holds uncertain attempts for review. Automatic eventual delivery is not guaranteed across app closure or unresolved uncertainty; status exposes those conditions.
 
 The Claude-compatible waiter uses a bundled official MCP client to wait for pending work. It never claims or reads bodies. A harness may use its process completion as a native notification, but that behavior depends on the host and is not implied by the MCP standard. Closed-session wake is unverified.
 

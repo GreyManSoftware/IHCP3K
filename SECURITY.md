@@ -1,11 +1,13 @@
-# Security and deployment status
+# Security
 
-IHCP3K currently supports synthetic evaluation only. Its checked-in bearer strings are public test fixtures, not deployable credentials. Do not send private work through the demo or publish its port on a non-loopback interface.
+The synthetic demo's credentials are public test strings. Live mode rejects that configuration. Keep the service on loopback; remote multi-user deployment is outside this release's supported scope.
 
-The service authenticates requests, restricts tools by principal, validates inbox scope and checks Host/Origin. This does not establish isolation between full-access processes running as the same OS user. Folder-scoped configuration alone does not isolate sessions sharing that folder.
+Live credentials are generated separately for senders, PAs, waiters and administrators. Tools are filtered by role and recipient scope is checked again during execution. Keep PA credentials local to the intended PA project and admin credentials out of model-facing MCP configuration. Same-user, full-access processes can still read each other's files; project scope is not a hostile-process sandbox.
 
-Completion removes the logical message body. It does not guarantee forensic erasure from SQLite pages, WAL files, backups or storage hardware. Compact dedup records persist so old resends cannot silently become new work. Uncertain actions require reconciliation.
+Request authentication, Host/Origin checks, bounded request sizes, pending limits and claim fencing reduce accidental exposure and replay. A peer message is data, not permission. An uncertain external effect must be reconciled before retrying it.
 
-Never place real credentials, conversation history or live mappings in this repository. Before publication, scan staged files and Git history. For a security report, use GitHub private vulnerability reporting if available; do not post secrets or private payloads in a public issue. If that facility is unavailable, open only a non-sensitive request for a private reporting channel.
+Completion clears the logical body; it does not securely erase SQLite pages, WAL files, backups or storage hardware. Dedup identities persist. Backups have manual retention. The pending-message limit is not a disk quota; monitor named-volume space.
 
-Production release gates include credential provisioning/rotation, bounded operational recovery, backup and quarantined restore, crash-safe native wake accounting, storage limits, upgrade/rollback procedures and live harness compatibility testing.
+Private credentials, history, session mappings and memory belong outside this repository. Do not log header-helper stdout. Back up configuration before changing it. Rotation requires coordinating token files, server config and a controlled service restart; never silently invalidate another running client.
+
+For security reports, use GitHub private vulnerability reporting if available. Otherwise open only a non-sensitive request for a private channel; never put credentials or private payloads in a public issue.

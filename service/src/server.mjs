@@ -15,16 +15,21 @@ const schemas={
   'mail.release':{...claim,work_started:z.boolean()},
   'mail.status':{recipient},
   'wake.wait':{recipient,timeout_ms:z.number().int().min(0).max(25000)},
+  'wake.reserve':{recipient},
+  'wake.record':{recipient,generation:z.number().int().positive(),dispatch_token:z.string().uuid(),result:z.enum(['queued','uncertain'])},
+  'control.reset_wake':{recipient,expected_generation:z.number().int().nonnegative(),reason:z.string().min(1).max(4096)},
   'control.pause':{recipient,pause_id:z.string().min(1).max(100),paused:z.boolean()},
   'control.inspect':{recipient,limit:z.number().int().min(1).max(20).default(10)},
   'control.resolve':{id:z.string().uuid(),expected_generation:z.number().int().nonnegative(),action:z.enum(['requeue','abandon']),reason:z.string().min(1).max(4096)}
 };
 const permissions={'mail.send':'send','mail.claim':'claim','mail.renew':'claim','mail.complete':'claim','mail.release':'claim','mail.status':'status','wake.wait':'wake','control.pause':'admin','control.inspect':'admin','control.resolve':'admin'};
 const methods={'mail.send':'send','mail.claim':'claim','mail.renew':'renew','mail.complete':'complete','mail.release':'release','mail.status':'status','wake.wait':'wait','control.pause':'pause','control.inspect':'inspect','control.resolve':'resolve'};
+Object.assign(permissions,{'wake.reserve':'wake','wake.record':'wake','control.reset_wake':'admin'});
+Object.assign(methods,{'wake.reserve':'reserveWake','wake.record':'recordWake','control.reset_wake':'resetWake'});
 function equal(a,b) { const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length===bb.length && timingSafeEqual(aa,bb); }
 function reject(res,code,error) { res.writeHead(code,{'Content-Type':'application/json'});res.end(JSON.stringify({error})); }
 
-export function createService(store,{principals,allowedHosts=['127.0.0.1','localhost'],allowedOrigins=[]}) {
+export function createService(store,{principals,allowedHosts=['127.0.0.1','localhost'],allowedOrigins=[],mode='synthetic'}) {
   if (!Array.isArray(principals) || principals.length===0 || principals.some(p=>!p.token || p.token.length<24)) throw Error('Invalid principal configuration');
   const active=new Set();
   const httpServer=http.createServer(async (req,res)=>{
@@ -36,7 +41,7 @@ export function createService(store,{principals,allowedHosts=['127.0.0.1','local
     if (!principal) return reject(res,401,'UNAUTHORIZED');
     if (req.url==='/health' && req.method==='GET') {
       res.writeHead(200,{'Content-Type':'application/json'});
-      return res.end(JSON.stringify({status:'synthetic-only',instance_id:store.instanceId,sqlite:store.sqliteVersion}));
+      return res.end(JSON.stringify({status:mode,instance_id:store.instanceId,sqlite:store.sqliteVersion}));
     }
     if (req.url!=='/mcp') return reject(res,404,'NOT_FOUND');
     if (req.method!=='POST') {res.setHeader('Allow','POST');return reject(res,405,'METHOD_NOT_ALLOWED');}
@@ -49,11 +54,11 @@ export function createService(store,{principals,allowedHosts=['127.0.0.1','local
       parsed=JSON.parse(Buffer.concat(chunks).toString('utf8'));
     } catch {return reject(res,400,'INVALID_JSON');}
     if (active.size>=64) return reject(res,503,'BUSY');
-    const server=new McpServer({name:'harness-coordination-phase2',version:'0.1.0'});
+    const server=new McpServer({name:'ihcp3k',version:'0.2.0'});
     const abort=new AbortController();
     for (const [name,inputSchema] of Object.entries(schemas)) {
       if (!principal.permissions.includes(permissions[name])) continue;
-      server.registerTool(name,{description:`Synthetic coordination ${name}`,inputSchema},async (args,extra)=>{
+      server.registerTool(name,{description:`IHCP3K coordination ${name}`,inputSchema},async (args,extra)=>{
         try {
           const signal=AbortSignal.any([abort.signal,extra.signal]);
           const value=await store[methods[name]](principal,args,signal);

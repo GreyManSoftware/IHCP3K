@@ -33,7 +33,7 @@ export class Store extends EventEmitter {
     requireThat(major > 3 || (major === 3 && (minor > 51 || minor === 51 && patch >= 3)), 'SQLITE_VERSION_UNSUPPORTED');
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=2000;');
     const schema = this.db.prepare('PRAGMA user_version').get().user_version;
-    requireThat(schema >= 0 && schema <= 2, 'SCHEMA_VERSION_UNSUPPORTED');
+    requireThat(schema >= 0 && schema <= 3, 'SCHEMA_VERSION_UNSUPPORTED');
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY, sender TEXT NOT NULL, recipient TEXT NOT NULL,
@@ -65,6 +65,12 @@ export class Store extends EventEmitter {
     if (schema < 2) this.transaction(() => {
       this.db.exec('ALTER TABLE outbox ADD COLUMN notification_attempts INTEGER NOT NULL DEFAULT 0; ALTER TABLE outbox ADD COLUMN last_notified INTEGER; PRAGMA user_version=2;');
     });
+    this.db.exec(`CREATE TABLE IF NOT EXISTS wake_dispatch (
+      recipient TEXT PRIMARY KEY, generation INTEGER NOT NULL DEFAULT 0,
+      state TEXT NOT NULL CHECK(state IN ('idle','reserved','queued','uncertain')),
+      token_hash TEXT, deadline INTEGER, updated_at INTEGER NOT NULL, detail TEXT
+    ); PRAGMA user_version=3;`);
+    this.db.exec("UPDATE wake_dispatch SET state='uncertain',deadline=NULL WHERE state='reserved';");
     // After service restart, a former handler might still have performed an external effect.
     this.db.exec("UPDATE messages SET state='reconcile' WHERE state='claimed'; UPDATE outbox SET state='reconcile' WHERE state='claimed';");
     this.sqliteVersion = version;
@@ -81,7 +87,7 @@ export class Store extends EventEmitter {
   scope(principal, permission, recipient) {
     requireThat(principal?.permissions?.includes(permission), 'FORBIDDEN');
     this.recipient(recipient);
-    requireThat(principal.recipients.includes(recipient), 'FORBIDDEN');
+    requireThat((principal.scopes?.[permission] ?? principal.recipients ?? []).includes(recipient), 'FORBIDDEN');
   }
   paused(recipient) { return !!this.db.prepare('SELECT 1 FROM pauses WHERE recipient=? LIMIT 1').get(recipient); }
   pending(recipient) { return this.db.prepare("SELECT count(*) AS n FROM messages WHERE recipient=? AND state='pending'").get(recipient).n; }
@@ -118,6 +124,7 @@ export class Store extends EventEmitter {
     return this.transaction(() => {
       requireThat(!this.paused(recipient),'PAUSED');
       const rows = this.db.prepare("SELECT * FROM messages WHERE recipient=? AND state='pending' ORDER BY created_at,id LIMIT ?").all(recipient,limit);
+      if(rows.length)this.db.prepare("UPDATE wake_dispatch SET state='idle',generation=generation+1,token_hash=NULL,deadline=NULL,updated_at=? WHERE recipient=?").run(this.now(),recipient);
       return rows.map(row => {
         const token=randomUUID(), generation=row.generation+1, deadline=this.now()+lease_s*1000;
         this.db.prepare("UPDATE messages SET state='claimed',handler=?,generation=?,token_hash=?,deadline=? WHERE id=?").run(handler_id,generation,hash(token),deadline,row.id);
@@ -181,7 +188,7 @@ export class Store extends EventEmitter {
   status(principal, {recipient}) {
     this.scope(principal,'status',recipient);
     const last=this.db.prepare('SELECT value FROM metadata WHERE key=?').get('waiter_last_seen:'+recipient);
-    return {recipient,delivery:this.delivery(recipient),waiter_last_seen:last?new Date(Number(last.value)).toISOString():null,counts:this.db.prepare('SELECT state,count(*) AS count FROM messages WHERE recipient=? GROUP BY state').all(recipient),instance_id:this.instanceId};
+    return {recipient,delivery:this.delivery(recipient),wake_dispatch:this.db.prepare('SELECT state,generation,updated_at,detail FROM wake_dispatch WHERE recipient=?').get(recipient)??null,waiter_last_seen:last?new Date(Number(last.value)).toISOString():null,counts:this.db.prepare('SELECT state,count(*) AS count FROM messages WHERE recipient=? GROUP BY state').all(recipient),instance_id:this.instanceId};
   }
   inspect(principal, {recipient,limit=10}) {
     this.scope(principal,'admin',recipient);
@@ -210,6 +217,39 @@ export class Store extends EventEmitter {
   nextWake(recipient) {
     const last=this.db.prepare('SELECT value FROM metadata WHERE key=?').get('last_notification:'+recipient);
     return last?Number(last.value)+this.wakeGapMs:0;
+  }
+  reserveWake(principal,{recipient}) {
+    this.scope(principal,'wake',recipient);
+    return this.transaction(()=>{
+      requireThat(!this.paused(recipient),'PAUSED');
+      const row=this.db.prepare('SELECT * FROM wake_dispatch WHERE recipient=?').get(recipient);
+      if(!this.pending(recipient) || row && row.state!=='idle')return {recipient,reserved:false,state:row?.state??'idle'};
+      const token=randomUUID(),generation=(row?.generation??0)+1,now=this.now();
+      this.db.prepare("INSERT INTO wake_dispatch VALUES(?,?,'reserved',?,?,?,NULL) ON CONFLICT(recipient) DO UPDATE SET generation=excluded.generation,state=excluded.state,token_hash=excluded.token_hash,deadline=excluded.deadline,updated_at=excluded.updated_at,detail=NULL").run(recipient,generation,hash(token),now+60000,now);
+      return {recipient,reserved:true,generation,dispatch_token:token};
+    });
+  }
+  recordWake(principal,{recipient,generation,dispatch_token,result}) {
+    this.scope(principal,'wake',recipient);
+    requireThat(['queued','uncertain'].includes(result),'INVALID_WAKE_RESULT');
+    return this.transaction(()=>{
+      const row=this.db.prepare('SELECT * FROM wake_dispatch WHERE recipient=?').get(recipient);
+      requireThat(row && row.generation===generation && typeof dispatch_token==='string' && row.token_hash===hash(dispatch_token),'STALE_WAKE');
+      if(row.state===result)return {recipient,state:result,duplicate:true};
+      requireThat(row.state==='reserved' && row.deadline>this.now(),'STALE_WAKE');
+      this.db.prepare('UPDATE wake_dispatch SET state=?,deadline=NULL,updated_at=? WHERE recipient=?').run(result,this.now(),recipient);
+      return {recipient,state:result};
+    });
+  }
+  resetWake(principal,{recipient,expected_generation,reason}) {
+    this.scope(principal,'admin',recipient);
+    requireThat(typeof reason==='string' && reason.length>0 && reason.length<=4096,'INVALID_RESOLUTION');
+    return this.transaction(()=>{
+      const row=this.db.prepare('SELECT * FROM wake_dispatch WHERE recipient=?').get(recipient);
+      requireThat(row && row.generation===expected_generation && ['queued','uncertain'].includes(row.state),'RESOLUTION_CONFLICT');
+      this.db.prepare("UPDATE wake_dispatch SET state='idle',generation=generation+1,token_hash=NULL,deadline=NULL,updated_at=?,detail=? WHERE recipient=?").run(this.now(),JSON.stringify({principal:principal.id,reason}),recipient);
+      return {recipient,state:'idle',generation:row.generation+1};
+    });
   }
   async wait(principal, {recipient,timeout_ms}, signal) {
     this.scope(principal,'wake',recipient);
@@ -240,6 +280,7 @@ export class Store extends EventEmitter {
   maintain() {
     const at=this.now();
     return this.transaction(() => {
+      this.db.prepare("UPDATE wake_dispatch SET state='uncertain',deadline=NULL,updated_at=? WHERE state='reserved' AND deadline<=?").run(at,at);
       const expired=this.db.prepare("SELECT id FROM messages WHERE state='claimed' AND deadline<=? LIMIT 100").all(at);
       for (const {id} of expired) {
         this.db.prepare("UPDATE messages SET state='reconcile',deadline=NULL WHERE id=?").run(id);
