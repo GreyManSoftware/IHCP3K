@@ -42,13 +42,13 @@ You choose when to delegate. Ordinary prompts stay local; IHCP3K doesn't silentl
 
 Give your assistant this prompt:
 
-> Set up IHCP3K using https://github.com/GreyManSoftware/IHCP3K/blob/master/AGENT_SETUP.md. Ask me where the files should be saved, then help me connect my coding assistants and test a request and reply.
+> Set up IHCP3K using https://github.com/GreyManSoftware/IHCP3K/blob/master/AGENT_SETUP.md. Ask only “Where do you want to install it?”, then connect my coding assistants and test a request and reply.
 
 The prebuilt release needs an existing Node 24.15+ installation. Docker isn't needed to run it.
 
 ## Everyday usage
 
-Register each harness once. IHCP3K discovers its existing and future sessions automatically when you discover or send work—no setup per chat. Use the `harness-interop` skill:
+Register each harness once. Registration connects it reciprocally with the other registered harnesses in that installation. IHCP3K discovers its existing and future sessions automatically when you discover or send work—no setup per chat. Use the `harness-interop` skill:
 
 | Mode | Purpose | Example |
 | --- | --- | --- |
@@ -85,7 +85,7 @@ flowchart LR
 
 MCP (Model Context Protocol) exposes IHCP3K tools to each assistant. SQLite stores messages in a private local file, without a separate database server. Configured notifications alert the receiving session; if every runtime is closed, messages wait until one starts again.
 
-**Version 1.1.0.** A Claude–Codex round trip was tested with the previous registration flow. The new harness-wide flow has automated coverage and verified native discovery; a fresh native install and delivery test remains. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md).
+**Version 1.1.1.** A Claude–Codex round trip was tested with the previous registration flow. The new harness-wide flow has automated coverage and verified native discovery; a fresh native install and delivery test remains. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md).
 
 [Download](https://github.com/GreyManSoftware/IHCP3K/releases) · [Agent setup](AGENT_SETUP.md) · [Architecture](docs/architecture.md) · [Technical terms](docs/terminology.md)
 

@@ -2,6 +2,12 @@
 
 This page distinguishes automated tests from checks performed in real agent applications. A **fixture** is controlled test data or a simulated app response; a **rehearsal** exercises a specific real workflow. Neither proves compatibility with every app version. Technical terms are defined in [terminology](terminology.md).
 
+## Version 1.1.1: one-question setup
+
+Setup asks only “Where do you want to install it?” The agent chooses the internal layout and native registration details. Omitting `peers` now enables reciprocal communication with existing and future registered harnesses in the same private installation; explicit existing restrictions remain enforced.
+
+All **121 automated tests** pass across the full-suite run and the corrected installer-version assertion rerun. Existing registry/MCP tests now register without peer lists, exercise later harness joins and retain restriction/revocation checks. The eight packaged installer checks also pass on Windows. The skill validator and local Markdown links pass. These checks validate the implementation and instructions, not an unobserved native installation or a guarantee that every agent follows the guide. Native permission prompts remain controlled by each harness.
+
 ## Version 1.1.0: harness registration
 
 The rebuilt 1.1.0 bundles passed **121 automated tests**: 81 service, 16 legacy waiter, 3 queue/command-help, 13 legacy import and 8 installer checks. New cases cover registration reuse, automatic new/missing session discovery, stable addresses, reciprocal permissions, explicit source-session isolation, whole-harness revocation, fresh credentials on relink, failed scans, competing process leases and offline restore. Official MCP SDK clients exercise the new tools and worker ownership. Native command fixtures cover pagination, malformed listings, timeouts and unsupported adapters. The eight packaged installer checks also passed separately on Windows Node 24.15.0.

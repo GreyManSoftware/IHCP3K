@@ -16,9 +16,9 @@ export class HarnessRegistry{
  authenticate(secret){const h=hash(secret),row=this.db.prepare('SELECT id,revision FROM harnesses WHERE active=1 AND token_hash=?').get(h);return row?{id:'harness:'+row.id,harness:row.id,harness_hash:h,harness_revision:row.revision,permissions:['harness']}:null;}
  active(p){return !p.harness_hash||!!this.db.prepare('SELECT 1 FROM harnesses WHERE id=? AND active=1 AND token_hash=? AND revision=?').get(p.harness,p.harness_hash,p.harness_revision);}
  row(p){check(this.active(p)&&p.permissions.includes('harness'),'FORBIDDEN');const row=this.db.prepare('SELECT * FROM harnesses WHERE id=? AND active=1').get(p.harness);check(row,'HARNESS_UNREGISTERED');return row;}
- register(p,{harness,credential,discovery,profile,peers,notification}){
+ register(p,{harness,credential,discovery,profile,peers=['*'],notification}){
   check(p.permissions.includes('registry'),'FORBIDDEN');check(validId(harness)&&typeof credential==='string'&&/^[A-Za-z0-9_-]{43,128}$/.test(credential),'INVALID_HARNESS');
-  check(Array.isArray(peers)&&peers.length<=100&&peers.every(validId)&&new Set(peers).size===peers.length,'INVALID_HARNESS_PEERS');
+  check(Array.isArray(peers)&&peers.length<=100&&peers.every(id=>id==='*'||validId(id))&&new Set(peers).size===peers.length,'INVALID_HARNESS_PEERS');
   validateDiscovery(discovery);this.store.directory.validateProfile(profile);
   if(notification)check(notification.enabled===true&&['codex-queue','claude-message'].includes(notification.type)&&((discovery.type==='codex'&&notification.type==='codex-queue')||(discovery.type==='claude'&&notification.type==='claude-message')),'INVALID_NOTIFICATION_TEMPLATE');
   const config=notification?{...discovery,notification}:discovery;
@@ -78,7 +78,7 @@ export class HarnessRegistry{
    }
   })();this.inflight.set(harness,task);try{return await task;}finally{this.inflight.delete(harness);this.db.prepare('DELETE FROM harness_scans WHERE harness=? AND token=?').run(harness,scanToken);}
  }
- permitted(p){const own=this.row(p),peers=JSON.parse(own.peers_json);return this.db.prepare('SELECT * FROM harnesses WHERE active=1 ORDER BY id').all().filter(r=>r.id===own.id||peers.includes(r.id)&&JSON.parse(r.peers_json).includes(own.id));}
+ permitted(p){const own=this.row(p),peers=JSON.parse(own.peers_json);return this.db.prepare('SELECT * FROM harnesses WHERE active=1 ORDER BY id').all().filter(r=>r.id===own.id||(peers.includes('*')||peers.includes(r.id))&&(JSON.parse(r.peers_json).includes('*')||JSON.parse(r.peers_json).includes(own.id)));}
  async discover(p,{force=false}={},signal){
   const allowed=this.permitted(p);const observations=[];
   signal=AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(30000)]);

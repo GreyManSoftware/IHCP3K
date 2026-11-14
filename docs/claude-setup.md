@@ -2,7 +2,7 @@
 
 This page covers the older local HTTP connection, not the current default install. A **receiving session** owns an inbox. A **waiter** is a small background program that signals when messages arrive, without reading them or asking a model to poll. Token filenames and recipient IDs in the examples are legacy identifiers, not required chat titles. See [terminology](terminology.md).
 
-This is historical Docker/HTTP guidance. For the v1.1.0 stdio runtime and conditional native messaging, use [agent setup](../AGENT_SETUP.md) and [native adapters](native-adapters.md). These observations apply to the older HTTP integration, not the current default setup.
+This is historical Docker/HTTP guidance. For the v1.1.1 stdio runtime and conditional native messaging, use [agent setup](../AGENT_SETUP.md) and [native adapters](native-adapters.md). These observations apply to the older HTTP integration, not the current default setup.
 
 Claude Code's native client has passed a send → claim → complete round trip with Streamable HTTP and file-backed `headersHelper` authentication. The tested client converts dotted service names (`mail.send`) to underscore tool names. A fresh native session loaded the live send-only server; the existing receiving session did not automatically load the new settings. Check behavior again after a harness upgrade.
 

@@ -13,7 +13,7 @@ function fixture(t){
  const store=new SharedStore(':memory:',{recipients:['bootstrap']});t.after(()=>store.close());
  const r=store.harnesses,inventory={alpha:[row('a1'),row('a2')],beta:[row('b1')]};
  r.discoverNative=async config=>inventory[config.cwd.slice(1)];
- const register=(id,peers=['alpha','beta'],credential=(id==='alpha'?'a':'b').repeat(43))=>r.register(admin,{harness:id,credential,discovery:{type:'codex',executable:'/native/codex',cwd:'/'+id},profile,peers});
+ const register=(id,peers=undefined,credential=(id==='alpha'?'a':'b').repeat(43))=>r.register(admin,{harness:id,credential,discovery:{type:'codex',executable:'/native/codex',cwd:'/'+id},profile,peers});
  register('alpha');register('beta');return {store,r,inventory,register,a:r.authenticate('a'.repeat(43)),b:r.authenticate('b'.repeat(43))};
 }
 test('one harness grant discovers existing and later sessions; stable IDs survive refresh and absent sessions are disabled',async t=>{
@@ -66,8 +66,14 @@ test('unregister racing an inventory cannot resurrect sessions; relink requires 
  assert.throws(()=>register('alpha'),/FRESH_HARNESS_CREDENTIAL_REQUIRED/);
  register('alpha',['alpha','beta'],'c'.repeat(43));assert.equal(r.authenticate('a'.repeat(43)),null);assert.ok(r.authenticate('c'.repeat(43)));
 });
-test('peer visibility requires reciprocal harness permission',async t=>{
- const {r,a,store}=fixture(t);store.db.prepare('UPDATE harnesses SET peers_json=? WHERE id=?').run('[]','beta');
+test('registration connects existing and later harnesses automatically; explicit restrictions remain enforced',async t=>{
+ const {r,a,store,register,inventory}=fixture(t);
+ assert.deepEqual((await r.discover(a)).harnesses.map(h=>h.harness),['alpha','beta']);
+ inventory.gamma=[row('g1')];register('gamma',undefined,'g'.repeat(43));
+ assert.deepEqual((await r.discover(a)).harnesses.map(h=>h.harness),['alpha','beta','gamma']);
+ assert.deepEqual((await r.discover(r.authenticate('g'.repeat(43)))).harnesses.map(h=>h.harness),['alpha','beta','gamma']);
+ r.unregister(r.authenticate('g'.repeat(43)));
+ assert.throws(()=>register('bad',['not valid']),/INVALID_HARNESS_PEERS/);store.db.prepare('UPDATE harnesses SET peers_json=? WHERE id=?').run('[]','beta');
  assert.deepEqual((await r.discover(a)).harnesses.map(h=>h.harness),['alpha']);
 });
 

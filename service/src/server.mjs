@@ -56,7 +56,7 @@ Object.assign(permissions,{'directory.enroll':'registry','directory.register':'e
 permissions['directory.inspect']='registry';
 const directoryMethods={'directory.inspect':'inspect','directory.enroll':'issue','directory.register':'register','directory.refresh':'refresh','directory.discover':'discover','directory.deregister':'deregister'};
 const harnessSchemas={
- 'harness.register':{harness:recipient,credential:z.string(),discovery:profile,profile,peers:z.array(recipient).max(100),notification:profile.optional()},
+ 'harness.register':{harness:recipient,credential:z.string(),discovery:profile,profile,peers:z.array(z.union([recipient,z.literal('*')])).max(100).optional(),notification:profile.optional()},
  'harness.discover':{force:z.boolean().default(false)},
  'harness.unregister':{},
  'session.request':{session_id:z.string().min(1).max(256),...schemas['mail.request']},
@@ -78,7 +78,7 @@ function equal(a,b) { const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length
 function reject(res,code,error) { res.writeHead(code,{'Content-Type':'application/json'});res.end(JSON.stringify({error})); }
 
 export function createToolServer(store,directory,principal,abort=new AbortController(),resolvePrincipal=()=>principal){
-    const server=new McpServer({name:'ihcp3k',version:'1.1.0'});
+    const server=new McpServer({name:'ihcp3k',version:'1.1.1'});
     if(store.harnesses)for(const [name,inputSchema] of Object.entries(harnessSchemas)){
       if(name.startsWith('session.worker_')&&!store.workers)continue;
       const permitted=name==='harness.register'?principal.permissions.includes('registry'):principal.permissions.includes('harness');

@@ -137,7 +137,7 @@ test('bundled local install, strict reuse and explicit stdio CLI workflow',async
   await t.test('connect uses official SDK tools and rejects ambiguous/nonlocal transports',async()=>{
     const client=await connect({runtimeFile,tokenFile});
     try {
-      assert.equal(client.getServerVersion().version,'1.1.0');
+      assert.equal(client.getServerVersion().version,'1.1.1');
       assert.ok((await client.listTools()).tools.some(tool=>tool.name==='directory.enroll'));
       assert.equal((await call(client,'mail.status',{recipient:'bootstrap'})).recipient,'bootstrap');
     }finally{await client.close();}
@@ -149,7 +149,7 @@ test('bundled local install, strict reuse and explicit stdio CLI workflow',async
 
   await t.test('register/unregister manages one reusable harness credential through the packaged MCP server',async()=>{
     const harnessDir=path.join(base,'harness'),input=path.join(base,'harness-config.json');
-    write(input,{harness:'synthetic-harness',discovery:{type:'codex',executable:process.execPath,cwd:base},profile:{label:'Synthetic',source:'fixture',observed_at:new Date().toISOString(),fresh_for_s:600,models:[],usage:[],wake:{type:'manual',lifetime:'test',closed_app:'unknown',human_fallback:'check'}},peers:[]});
+    write(input,{harness:'synthetic-harness',discovery:{type:'codex',executable:process.execPath,cwd:base},profile:{label:'Synthetic',source:'fixture',observed_at:new Date().toISOString(),fresh_for_s:600,models:[],usage:[],wake:{type:'manual',lifetime:'test',closed_app:'unknown',human_fallback:'check'}}});
     const first=await cli(['register',runtimeFile,input,harnessDir]);assert.equal(first.registered,true);
     const second=await cli(['register',runtimeFile,input,harnessDir]);assert.equal(second.reused,true);
     assert.equal(fs.existsSync(path.join(harnessDir,'session.tok')),false);assert.equal(fs.existsSync(path.join(harnessDir,'harness.tok')),true);

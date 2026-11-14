@@ -1,15 +1,15 @@
 # Agent setup and operation
 
-Install **IHCP3K 1.1.0** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
+Install **IHCP3K 1.1.1** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
 
 ## First install
 
-Ask one location question: **“Where should the files be saved?”** If the user already supplied a folder, use it. Do not ask them to design a layout or choose separate code, database, credentials or helper folders.
+Ask exactly one setup question: **“Where do you want to install it?”** If the user already supplied a folder, use it. Choose the layout, harness ID, local connection scope and peer defaults automatically. Do not ask follow-up setup questions about those choices. Registration itself means reciprocal communication with other harnesses registered in this private installation; it does not start work or grant unrestricted execution.
 
 The agent handles the rest:
 
 1. Record that folder as `<install-root>`. Store the extracted release under `app/`, private runtime data under `data/`, and harness credentials under `data/harnesses/<harness-id>/`. Create needed parent folders; let the installer create and protect `data/`. Keep private data out of Git and shared/public folders.
-2. Download `IHCP3K-1.1.0.zip` and its `.sha256` file from [the release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v1.1.0), verify the hash and extract the package contents into `app/`. Use this current guide and its linked [skill](skills/harness-interop/SKILL.md); setup instructions inside an older release archive may differ.
+2. Download `IHCP3K-1.1.1.zip` and its `.sha256` file from [the release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v1.1.1), verify the hash and extract the package contents into `app/`. Use the included guide and [skill](skills/harness-interop/SKILL.md).
 3. Use existing Node 24.15+ (SQLite 3.51.3+). Respect the user's software-installation policy if it is missing. The prebuilt package needs no npm install or Docker at runtime.
 4. Run the following from `app/`, replacing the placeholder with the selected absolute path. The helper working directory defaults to `data/`; no separate question or `--workdir` is needed.
 
@@ -17,11 +17,11 @@ The agent handles the rest:
 node scripts/install-local.mjs <install-root>/data
 ```
 
-Reuse the recorded installation when another harness joins. Do not ask for another layout or create another database. Preserve existing files; if the selected folder already contains an installation, inspect and reuse it when compatible. Older installations need an explicit offline migration. Native app approvals still apply.
+Reuse the recorded installation when another harness joins. Do not ask for another layout or create another database. Preserve existing files; if the selected folder already contains an installation, inspect and reuse it when compatible. Older installations need an explicit offline migration. Native app permission prompts still apply; do not add agent confirmation questions for setup choices already covered by the install request.
 
 ## Register one harness
 
-Record a unique harness instance ID, installed version, exact executable and native account/profile being inventoried. Two computers or separate accounts are distinct harness instances even if both use Codex. Select the permitted peer harness IDs with the user; peer permission must be reciprocal. Record the models available to this harness, their evidence/date, and any observed usage. Model listings do not grant permission to spend or dispatch.
+Record a unique harness instance ID, installed version, exact executable and native account/profile being inventoried. Two computers or separate accounts are distinct harness instances even if both use Codex. Omit `peers` in normal registration: reciprocal access to existing and future registered harnesses in this installation is automatic. Preserve any explicitly configured restrictions in an existing installation; do not silently broaden them. Record the models available to this harness, their evidence/date, and any observed usage. Model listings do not grant permission to spend or dispatch.
 
 The supported automatic discovery adapters are:
 
@@ -34,7 +34,6 @@ Prepare a private configuration (replace every placeholder):
 ```json
 {
   "harness": "codex-local",
-  "peers": ["claude-local"],
   "discovery": {
     "type": "codex",
     "executable": "/absolute/path/to/codex",
@@ -77,7 +76,7 @@ Install the returned MCP configuration in the **chosen harness-wide scope**, aft
 
 The token intentionally authorizes the harness, not one chat. Every mail operation supplies its exact source `session_id`; the server checks that it belongs to this harness's discovered inventory. Never set a connection-wide “current session”, because multiple chats can share one MCP process. Never put one per-session credential into the global entry.
 
-Use the app's reliable current-session metadata to identify the caller. Match an exact native ID from discovery, not a title or the most recently active chat. If the app cannot expose its current ID, ask the user to choose the source from the discovered sessions. This selects an identity; it is not another registration. Same-harness clients share trust and can act as that harness's sessions; this is not isolation against malicious clients using the same credential or OS account.
+Use the app's reliable current-session metadata to identify the caller. Match an exact native ID from discovery, not a title or the most recently active chat. If the app cannot expose its current ID reliably, report that integration limitation and leave sending inactive; do not guess an identity or add a setup questionnaire. Same-harness clients share trust and can act as that harness's sessions; this is not isolation against malicious clients using the same credential or OS account.
 
 Existing chats may need a native configuration reload. Do not restart apps or broaden permissions silently. New chats use the same harness configuration and need no new IHCP3K token or enrolment.
 

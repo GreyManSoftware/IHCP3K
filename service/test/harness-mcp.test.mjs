@@ -13,7 +13,7 @@ test('one harness MCP configuration serves separate sessions; revocation applies
  const r=store.harnesses;r.discoverNative=async c=>[{native_id:c.cwd.slice(1)+'-1',label:'Example',cwd:'/test',state:'idle'},{native_id:c.cwd.slice(1)+'-2',label:'Other',cwd:'/test',state:'idle'}];
  const clients=[];
  for(const id of ['alpha','beta']){
-  const secret=id[0].repeat(43);r.register({id:'admin',permissions:['registry']},{harness:id,credential:secret,discovery:{type:'codex',executable:'/native/codex',cwd:'/'+id},profile,peers:['alpha','beta']});
+  const secret=id[0].repeat(43);r.register({id:'admin',permissions:['registry']},{harness:id,credential:secret,discovery:{type:'codex',executable:'/native/codex',cwd:'/'+id},profile});
   const server=createToolServer(store,store.directory,r.authenticate(secret),undefined,()=>r.authenticate(secret));
   const client=new Client({name:'test',version:'1'});const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);clients.push(client);
   t.after(async()=>{await client.close();await server.close();});

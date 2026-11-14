@@ -18,7 +18,7 @@ const digest=file=>createHash('sha256').update(fs.readFileSync(file)).digest('he
 export function readRuntime(runtimeFile) {
   requireNode();
   const file=path.resolve(runtimeFile),dir=path.dirname(file),runtime=readJSON(file);
-  if(runtime.transport!=='stdio'||runtime.version!=='1.1.0'||runtime.schema_version!==6||runtime.private_dir!==dir||
+  if(runtime.transport!=='stdio'||runtime.version!=='1.1.1'||runtime.schema_version!==6||runtime.private_dir!==dir||
     !/^[a-f0-9-]{36}$/.test(runtime.service_id??''))throw Error('INVALID_STDIO_RUNTIME');
   const expected={database:path.join(dir,'mail.db'),service_config:path.join(dir,'service.json'),bundle:path.join(dir,'bundles','stdio.mjs'),client_bundle:path.join(dir,'bundles','client.mjs')};
   for(const [key,value] of Object.entries(expected))if(runtime[key]!==value)throw Error('RUNTIME_PATH_MISMATCH');
@@ -57,7 +57,7 @@ export async function connect({url,runtimeFile,tokenFile}) {
     const token=fs.readFileSync(tokenFile,'utf8').trim();
     transport=new StreamableHTTPClientTransport(target,{requestInit:{headers:{Authorization:`Bearer ${token}`}}});
   }
-  const client=new Client({name:'ihcp3k-local-client',version:'1.1.0'});
+  const client=new Client({name:'ihcp3k-local-client',version:'1.1.1'});
   try {await client.connect(transport,{timeout:10000});}
   catch {await client.close().catch(()=>{});throw Error('MCP_CONNECT_FAILED');}
   return client;
