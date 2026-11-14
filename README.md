@@ -5,8 +5,9 @@
 ## What it does
 
 - Keeps messages across restarts, with duplicate protection and explicit completion.
-- Gives each PA access to its own inbox; ordinary sessions can have send-only access.
+- Gives configured receiving sessions access to their own inboxes; other sessions can have send-only access.
 - Includes a native queue adapter for Codex and a background waiter for Claude.
+- Suppresses new doorbells during a bounded active reply wait; ordinary notifications resume when waiting ends.
 - Cleans up completed message bodies without forgetting their duplicate identities.
 - Provides backups, cautious restores and an importer for the earlier file mailbox.
 
@@ -27,7 +28,11 @@ For a real setup, give your assistant [AGENT_SETUP.md](AGENT_SETUP.md). It cover
 
 ## Using it
 
-Once both sides are linked, ask your PA to send work to the other harness. The recipient checks the request against your permissions, claims the message and records the outcome. Messages do not grant permission or transfer ownership of a running task.
+Once both sides are linked, ask a configured session to send work to a permitted peer. The recipient checks the request against your permissions, claims the message and records the outcome. Messages do not grant permission or transfer ownership of a running task.
+
+The default installer creates one PA inbox per harness. You choose the receiving threads and bind their native IDs; installation does not discover or create management chats. PAs are optional coordinators, not required message relays. Direct replies to another session need that session's own inbox, scoped credential and wake binding, configured manually today.
+
+An actively waiting session can receive replies directly without another doorbell. The wait is bounded, and an already queued notification cannot be recalled. Closed-session wake and automatic startup remain unverified.
 
 Each harness still needs its own subscription or credentials. IHCP3K neither supplies inference nor combines account allowances.
 
