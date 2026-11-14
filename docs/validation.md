@@ -17,7 +17,7 @@ Additional checks:
 - Codex's native queue delivered a transport-only test on the next turn after a busy publication turn ended. This is separate from end-to-end bridge validation.
 - A user-started, Claude-session-owned attached bridge subsequently delivered an MCP notification into the existing Codex PA. Both waiters reconnected after a service restart. This proves session-bound delivery, not unattended startup.
 - Live legacy import completed after both consumers stopped file delivery. Handled messages became tombstones; uncertain messages stayed quarantined until the owner explicitly requested their abandonment. No historical work replayed. Legacy sender and watcher entry points now refuse file operations, and MCP is the sole active transport.
-- A pre-cutover database backup and source/script checkpoint were retained. Original file archives remained in place: directory renaming failed with an OS error, and a later user-requested deletion was rejected by execution policy. Retiring delivery and deleting historical copies are separate outcomes.
+- A pre-cutover database backup and source/script checkpoint were retained. After the initial rename and deletion failures, the owner independently arranged deletion of the retired mailbox directory; its absence was verified. Migration exports and saved claim copies still exist. Retiring delivery and deleting every historical copy are separate outcomes.
 - A fresh-clone mountpoint problem was fixed in the Docker runner.
 - Before the public export, eight independent waiter/service integration scenarios passed.
 
@@ -26,6 +26,6 @@ Not yet verified:
 - Full clean-install flow through `init-runtime.mjs` and `ops.mjs`: execution policy blocked the separate initializer/start/status/backup/stop probe with the generic reason “blocked by policy.” No specific enforcement layer or rationale was supplied. Syntax checks, service tests and the deployed operations above still passed.
 - Codex desktop reload, app-closed wake and OS-start recovery. The tested running Claude PA required the explicit SDK client rather than hot-loading the new native server.
 - An independently persistent Codex wake bridge: its hidden launch was rejected with “blocked by policy,” including an explicitly approved retry. The observed bridge is owned by a live Claude session and stops when that task ends.
-- Physical cleanup of the retired source archive. A generic execution-policy rejection supplied no specific reason. No successful deletion is claimed.
+- Complete cleanup of historical copies beyond the removed mailbox directory, including migration exports, saved claims and backups. The earlier deletion command was rejected by execution policy; removal of those remaining copies has not been verified.
 
 The release includes implementation and operator instructions for these paths, with their limits stated. It is experimental, not a claim of unattended production operation. Private runtime evidence, tokens and session mappings are excluded from Git.
