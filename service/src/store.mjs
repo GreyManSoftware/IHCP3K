@@ -19,6 +19,9 @@ export class Store extends EventEmitter {
     this.instanceId = randomUUID();
     this.armed = new Map();
     this.lastSeen = new Map();
+    // Presence is deliberately ephemeral: a service restart restores normal wakes.
+    this.attendees = new Map();
+    this.receiving = new Set();
     // A separate rollback-journal lock DB holds an OS-backed exclusive writer lock
     // for this process lifetime. SQLite releases it even after an abrupt crash.
     if (filename !== ':memory:') {
@@ -91,8 +94,74 @@ export class Store extends EventEmitter {
   }
   paused(recipient) { return !!this.db.prepare('SELECT 1 FROM pauses WHERE recipient=? LIMIT 1').get(recipient); }
   pending(recipient) { return this.db.prepare("SELECT count(*) AS n FROM messages WHERE recipient=? AND state='pending'").get(recipient).n; }
+  attendance(recipient) {
+    const row=this.attendees.get(recipient);
+    if(row && row.deadline<=this.now()){this.attendees.delete(recipient);return undefined;}
+    return row;
+  }
+  attend(principal,{recipient,handler_id,lease_s=60}) {
+    this.scope(principal,'claim',recipient);
+    requireThat(typeof handler_id==='string' && handler_id.length>0 && handler_id.length<=100,'INVALID_HANDLER');
+    requireThat(Number.isInteger(lease_s) && lease_s>=1 && lease_s<=120,'INVALID_ATTENDANCE_LEASE');
+    requireThat(!this.paused(recipient),'PAUSED');
+    requireThat(!this.attendance(recipient),'INBOX_ATTENDED');
+    const token=randomUUID(),deadline=this.now()+lease_s*1000;
+    this.attendees.set(recipient,{principal:principal.id,handler_id,token_hash:hash(token),deadline});
+    this.emit('changed',recipient);
+    const wake=this.db.prepare('SELECT state FROM wake_dispatch WHERE recipient=?').get(recipient);
+    return {recipient,attendance_token:token,deadline:new Date(deadline).toISOString(),notification_already_dispatched:!!wake && wake.state!=='idle'};
+  }
+  attendedBy(principal,{recipient,attendance_token}) {
+    this.scope(principal,'claim',recipient);
+    const row=this.attendance(recipient);
+    requireThat(row && row.principal===principal.id && typeof attendance_token==='string' && row.token_hash===hash(attendance_token),'STALE_ATTENDANCE');
+    return row;
+  }
+  unattend(principal,args) {
+    this.attendedBy(principal,args);
+    this.attendees.delete(args.recipient);
+    this.emit('changed',args.recipient);
+    return {recipient:args.recipient,attending:false};
+  }
+  changedWithin(recipient,timeout_ms,signal) {
+    if(signal?.aborted || timeout_ms<=0)return Promise.resolve();
+    return new Promise(resolve=>{
+      const done=()=>{clearTimeout(timer);this.off('changed',changed);signal?.removeEventListener('abort',done);resolve();};
+      const changed=id=>{if(id===recipient)done();};
+      const timer=setTimeout(done,timeout_ms);
+      this.on('changed',changed);signal?.addEventListener('abort',done,{once:true});
+    });
+  }
+  async receive(principal,args,signal) {
+    const {recipient,timeout_ms,limit=10,lease_s=300}=args;
+    this.attendedBy(principal,args);
+    requireThat(Number.isInteger(timeout_ms) && timeout_ms>=0 && timeout_ms<=25000,'INVALID_TIMEOUT');
+    requireThat(Number.isInteger(limit) && limit>=1 && limit<=20,'INVALID_LIMIT');
+    requireThat(Number.isInteger(lease_s) && lease_s>=1 && lease_s<=300,'INVALID_LEASE');
+    requireThat(!this.receiving.has(recipient),'RECEIVER_ALREADY_WAITING');
+    this.receiving.add(recipient);
+    const end=this.now()+timeout_ms;
+    try {
+      while(true){
+        const attendance=this.attendedBy(principal,args);
+        if(signal?.aborted)return {status:'cancelled',messages:[]};
+        if(this.paused(recipient))return {status:'paused',messages:[]};
+        const messages=this.claim(principal,{recipient,handler_id:attendance.handler_id,limit,lease_s});
+        if(messages.length)return {status:'messages',messages};
+        const remaining=Math.min(end,attendance.deadline)-this.now();
+        if(remaining<=0)return {status:'timeout',messages:[]};
+        // A real timeout must terminate even when tests inject a stationary clock.
+        let changed=false;
+        const mark=id=>{if(id===recipient)changed=true;};
+        this.on('changed',mark);
+        try{await this.changedWithin(recipient,remaining,signal);}finally{this.off('changed',mark);}
+        if(!changed && !signal?.aborted)return {status:'timeout',messages:[]};
+      }
+    } finally {this.receiving.delete(recipient);}
+  }
   delivery(recipient) {
     if (this.paused(recipient)) return 'paused';
+    if (this.attendance(recipient)) return 'receiver_attending';
     if ((this.armed.get(recipient) || 0) > 0) return 'wake_available';
     return this.lastSeen.has(recipient) && this.now()-this.lastSeen.get(recipient)<60000 ? 'wake_recently_seen' : 'pending_without_wake';
   }
@@ -188,7 +257,8 @@ export class Store extends EventEmitter {
   status(principal, {recipient}) {
     this.scope(principal,'status',recipient);
     const last=this.db.prepare('SELECT value FROM metadata WHERE key=?').get('waiter_last_seen:'+recipient);
-    return {recipient,delivery:this.delivery(recipient),wake_dispatch:this.db.prepare('SELECT state,generation,updated_at,detail FROM wake_dispatch WHERE recipient=?').get(recipient)??null,waiter_last_seen:last?new Date(Number(last.value)).toISOString():null,counts:this.db.prepare('SELECT state,count(*) AS count FROM messages WHERE recipient=? GROUP BY state').all(recipient),instance_id:this.instanceId};
+    const attendance=this.attendance(recipient);
+    return {recipient,delivery:this.delivery(recipient),attendance:attendance?{handler_id:attendance.handler_id,deadline:new Date(attendance.deadline).toISOString()}:null,wake_dispatch:this.db.prepare('SELECT state,generation,updated_at,detail FROM wake_dispatch WHERE recipient=?').get(recipient)??null,waiter_last_seen:last?new Date(Number(last.value)).toISOString():null,counts:this.db.prepare('SELECT state,count(*) AS count FROM messages WHERE recipient=? GROUP BY state').all(recipient),instance_id:this.instanceId};
   }
   inspect(principal, {recipient,limit=10}) {
     this.scope(principal,'admin',recipient);
@@ -216,12 +286,13 @@ export class Store extends EventEmitter {
   }
   nextWake(recipient) {
     const last=this.db.prepare('SELECT value FROM metadata WHERE key=?').get('last_notification:'+recipient);
-    return last?Number(last.value)+this.wakeGapMs:0;
+    return Math.max(last?Number(last.value)+this.wakeGapMs:0,this.attendance(recipient)?.deadline??0);
   }
   reserveWake(principal,{recipient}) {
     this.scope(principal,'wake',recipient);
     return this.transaction(()=>{
       requireThat(!this.paused(recipient),'PAUSED');
+      if(this.attendance(recipient))return {recipient,reserved:false,state:'receiver_attending'};
       const row=this.db.prepare('SELECT * FROM wake_dispatch WHERE recipient=?').get(recipient);
       if(!this.pending(recipient) || row && row.state!=='idle')return {recipient,reserved:false,state:row?.state??'idle'};
       const token=randomUUID(),generation=(row?.generation??0)+1,now=this.now();
@@ -279,6 +350,7 @@ export class Store extends EventEmitter {
   }
   maintain() {
     const at=this.now();
+    for(const recipient of this.attendees.keys())this.attendance(recipient);
     return this.transaction(() => {
       this.db.prepare("UPDATE wake_dispatch SET state='uncertain',deadline=NULL,updated_at=? WHERE state='reserved' AND deadline<=?").run(at,at);
       const expired=this.db.prepare("SELECT id FROM messages WHERE state='claimed' AND deadline<=? LIMIT 100").all(at);

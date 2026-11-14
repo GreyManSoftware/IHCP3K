@@ -33,4 +33,6 @@ Each harness still needs its own subscription or credentials. IHCP3K neither sup
 
 [Protocol](docs/protocol.md) · [Architecture](docs/architecture.md) · [Validation](docs/validation.md) · [Security](SECURITY.md)
 
+[First-time setup review and session roles](docs/first-run-review.md)
+
 Private mail, credentials, memory and session mappings stay outside this repository. License selection is pending. This independent project is not affiliated with OpenAI or Anthropic.

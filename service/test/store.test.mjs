@@ -36,7 +36,10 @@ test('failed outbox insert rolls back the message and idempotency key',t=>{
 });
 test('sender, waiter and foreign inbox principals cannot claim',t=>{
   const {store}=fixture(t);store.send(sender,msg);
-  for(const principal of [sender,waiter,{...pa,recipients:['b']}])assert.throws(()=>store.claim(principal,{recipient:'a',handler_id:'bad'}),/FORBIDDEN/);
+  for(const principal of [sender,waiter,{...pa,recipients:['b']}]){
+    assert.throws(()=>store.claim(principal,{recipient:'a',handler_id:'bad'}),/FORBIDDEN/);
+    assert.throws(()=>store.attend(principal,{recipient:'a',handler_id:'bad'}),/FORBIDDEN/);
+  }
   assert.throws(()=>store.send(pa,msg),/FORBIDDEN/);
   const scoped={id:'scoped-pa',permissions:['send','claim'],scopes:{send:['b'],claim:['a']}};
   store.send(scoped,{...msg,recipient:'b'});
@@ -143,6 +146,63 @@ test('capacity, byte size and recipient validation reject without dropping exist
   assert.throws(()=>store.send(sender,{...msg,body:'😀'.repeat(20000)}),/BODY_TOO_LARGE/);
   assert.throws(()=>store.send(sender,{...msg,recipient:'unknown'}),/UNKNOWN_RECIPIENT/);
 });
+
+test('attendance suppresses wake hints and reservations, expires, and fences stale owners',async t=>{
+  const {store,advance}=fixture(t);
+  for(const lease_s of [0,121,1.5])assert.throws(()=>store.attend(pa,{recipient:'a',handler_id:'reader',lease_s}),/INVALID_ATTENDANCE_LEASE/);
+  const lease=store.attend(pa,{recipient:'a',handler_id:'reader',lease_s:2});
+  assert.throws(()=>store.attend(pa,{recipient:'a',handler_id:'other'}),/INBOX_ATTENDED/);
+  store.send(sender,msg);
+  assert.equal(store.status(pa,{recipient:'a'}).delivery,'receiver_attending');
+  assert.equal((await store.wait(waiter,{recipient:'a',timeout_ms:0})).status,'timeout');
+  assert.equal(store.reserveWake(waiter,{recipient:'a'}).state,'receiver_attending');
+  assert.equal(store.db.prepare('SELECT notification_attempts AS n FROM outbox').get().n,0);
+  assert.throws(()=>store.unattend({...pa,id:'other'},lease),/STALE_ATTENDANCE/);
+  advance(2000);
+  assert.equal((await store.wait(waiter,{recipient:'a',timeout_ms:0})).status,'pending');
+  const reservation=store.reserveWake(waiter,{recipient:'a'});
+  store.recordWake(waiter,{...reservation,result:'queued'});
+  const next=store.attend(pa,{recipient:'a',handler_id:'reader'});
+  assert.equal(next.notification_already_dispatched,true); // already queued cannot be retracted
+  assert.throws(()=>store.unattend(pa,lease),/STALE_ATTENDANCE/);
+  store.unattend(pa,next);
+  assert.equal(store.status(pa,{recipient:'a'}).wake_dispatch.state,'queued');
+});
+
+test('attended receive claims replies without doorbells and cleans up timeout, pause and abort',async t=>{
+  const {store}=fixture(t);
+  const lease=store.attend(pa,{recipient:'a',handler_id:'reader'});
+  const args={...lease,timeout_ms:1000};
+  const receiving=store.receive(pa,args);
+  await assert.rejects(store.receive(pa,args),/RECEIVER_ALREADY_WAITING/);
+  store.send(sender,msg);
+  const reply=await receiving;
+  assert.equal(reply.status,'messages');assert.equal(reply.messages[0].body,msg.body);
+  assert.equal(store.reserveWake(waiter,{recipient:'a'}).reserved,false);
+  store.complete(pa,{...reply.messages[0],outcome:'read directly'});
+  assert.equal((await store.receive(pa,{...args,timeout_ms:1})).status,'timeout');
+  const abort=new AbortController(),cancelled=store.receive(pa,args,abort.signal);abort.abort();
+  assert.equal((await cancelled).status,'cancelled');
+  store.pause(admin,{recipient:'a',pause_id:'user',paused:true});
+  assert.equal((await store.receive(pa,args)).status,'paused');
+  assert.equal(store.listenerCount('changed'),0);assert.equal(store.receiving.size,0);
+  store.unattend(pa,lease);
+  assert.equal(store.status(pa,{recipient:'a'}).attendance,null);
+});
+
+test('ending attendance releases a waiting doorbell and stale receive cannot steal a new lease',async t=>{
+  const {store,advance}=fixture(t);
+  const lease=store.attend(pa,{recipient:'a',handler_id:'reader',lease_s:1});
+  store.send(sender,msg);
+  const wake=store.wait(waiter,{recipient:'a',timeout_ms:1000});
+  store.unattend(pa,lease);
+  assert.equal((await wake).status,'pending');
+  const next=store.attend(pa,{recipient:'a',handler_id:'next',lease_s:1});
+  await assert.rejects(store.receive(pa,{...lease,timeout_ms:0}),/STALE_ATTENDANCE/);
+  advance(1000);store.maintain();
+  assert.equal(store.status(pa,{recipient:'a'}).attendance,null);
+  assert.equal(store.reserveWake(waiter,{recipient:'a'}).reserved,true);
+});
 test('abrupt process death releases ownership lock and preserves committed mail for reconciliation',{timeout:5000},async()=>{
   const dir=mkdtempSync(join(tmpdir(),'interop-test-')),filename=join(dir,'test.db');
   let store,child;
@@ -153,6 +213,7 @@ test('abrupt process death releases ownership lock and preserves committed mail 
     assert.throws(()=>new Store(filename,{recipients:['a','b']}),/SERVICE_ALREADY_RUNNING/);
     const exited=once(child,'exit');child.kill('SIGKILL');await exited;
     store=new Store(filename,{recipients:['a','b']});
+    assert.equal(store.status(pa,{recipient:'a'}).attendance,null);
     assert.equal(store.db.prepare("SELECT count(*) AS n FROM messages WHERE state='reconcile'").get().n,1);
     assert.equal(store.pending('a'),1);assert.equal(store.send(sender,msg).duplicate,true);
     assert.equal(store.db.prepare('PRAGMA integrity_check').get().integrity_check,'ok');

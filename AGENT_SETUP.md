@@ -46,6 +46,8 @@ Endpoint: `http://127.0.0.1:43188/mcp`, Streamable HTTP. The official MCP SDK im
 
 The credential helper is `scripts/headers.mjs <token-file>`. It prints an Authorization header for the harness to consume. **Do not run it into an agent transcript**, log its stdout or copy tokens into command-line arguments.
 
+First have the user designate the existing management thread, or explicitly request a new one. Record its native thread ID and inbox binding privately. Do not infer ownership from a title such as "PA", the most recent thread, or whichever chat runs installation. The initializer creates inbox names, not management threads. The service itself has no special PA requirement; see [the first-run review](docs/first-run-review.md) for current limits and direct-session messaging.
+
 ### Codex
 
 Use a send-only entry in user configuration and a PA entry only in the trusted PA project configuration. Merge into existing TOML; back it up first. Do not replace unrelated settings.
@@ -119,6 +121,20 @@ PA loop:
 - Record the actual outcome with the current claim token/generation.
 - If work never started, release with `work_started:false`. If effects may have happened, use `true`; the record becomes uncertain.
 - Read the next batch until the inbox is drained. Do not infer task success from a wake notification or an empty tool response.
+
+When initiating a request and actively waiting for its answer, use `mail.attend` before `mail.send`, then `mail.wait`, and `mail.unattend` in a cleanup path. The lease is scoped to your own inbox, at most 120 seconds; don't renew it after ending the turn. Handle any received messages under their actual authority, even if they are unrelated to the request. A queued doorbell may still arrive.
+
+The SDK fallback automates one bounded window:
+
+```sh
+node service/dist/client.mjs http://127.0.0.1:43188/mcp /private/tokens/alpha-pa.tok exchange request.json
+```
+
+```json
+{"inbox":"alpha-pa","handler_id":"alpha-requester","recipient":"beta-pa","kind":"question","body":"Requested question","idempotency_key":"stable-request-id","timeout_ms":25000}
+```
+
+`exchange` releases attendance after success or failure, with automatic expiry if release cannot be confirmed. Output may contain private message bodies and claim tokens. Complete returned claims normally. On timeout the ordinary doorbell takes over; do not create periodic AI polling or resend with a new key. Native tools may need a reload before newly added methods appear.
 
 A stale claim or uncertain native enqueue is a reconciliation task, not a reason to repeat the effect. An administrator inspects actual state before `control.resolve` or `control.reset_wake`, supplying the observed generation and a reason.
 

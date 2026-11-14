@@ -1,15 +1,17 @@
 # Validation
 
-Version 0.2.2 updates operational guidance and live validation evidence. Runtime code is unchanged from 0.2.1, checked on Windows with Docker, Node 24.15.0 and SQLite 3.51.3. The Docker base is pinned by digest in the runners.
+Version 0.3.0 adds bounded receiver attendance and direct request/reply waiting. Checked on Windows with Docker, Node 24.15.0 and SQLite 3.51.3. The Docker base is pinned by digest in the runners.
 
-`node scripts/dev.mjs test` passed **49 tests**:
+`node scripts/dev.mjs test` passed **52 tests**:
 
-- 19 service tests: authentication/scope, concurrent duplicate sends, fenced claims, pauses, abrupt process death, notification reservations, WAL backup, quarantined restore and atomic legacy import, including handled-list provenance and conflict rejection.
+- 22 service tests: authentication/scope, concurrent duplicate sends, fenced claims, pauses, abrupt process death, notification reservations, bounded attendance, direct receiving, WAL backup, quarantined restore and atomic legacy import. Attendance checks cover ownership, expiry, stale tokens, abort/timeout cleanup, release-to-wake fallback and an official-SDK peer exchange, including failed-send cleanup.
 - 16 waiter tests: official-SDK connection behavior, pause handling, bounded waits, recovery and secret redaction.
 - 1 table-driven native-queue test: accepted output, silent success, warned failure, nonzero exit and timeout.
 - 13 legacy-export tests: exact snapshots, unchanged originals, malformed inputs, concurrent changes, write-once output and an exporter-to-importer round trip covering both receipt formats, quarantine and duplicate protection.
 
 Additional checks:
+
+- A live Codex-to-Claude exchange received and completed Claude's acknowledgement during attendance without another bridge notification. Attendance was released, and Claude adopted the same helper for active reply waits. A preliminary self-send was correctly rejected by the existing peer-only send scope; permissions were not expanded.
 
 - Native Claude and Codex CLI clients each completed send → claim → complete against the synthetic demo using file-backed credential helpers. Dotted tool names worked in both.
 - The private live-mode service started on a loopback-only port, passed authenticated health/status checks, and passed a deployed backup/restore operation. Restore produced a separate paused database; it did not replace the active one.

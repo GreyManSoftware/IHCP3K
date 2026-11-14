@@ -5,6 +5,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Store } from '../src/store.mjs';
 import { createService } from '../src/server.mjs';
+import { exchange } from '../src/client.mjs';
 const config=JSON.parse(readFileSync(new URL('../fixture/config.json',import.meta.url)));
 test('official SDK clients authenticate, wait, send, claim and complete with concurrent dedup',async t=>{
   const store=new Store(':memory:',{recipients:config.recipients});
@@ -26,6 +27,21 @@ test('official SDK clients authenticate, wait, send, claim and complete with con
   const {id,claim_token,generation}=messages[0];
   const done=await pa.callTool({name:'mail.complete',arguments:{id,claim_token,generation,outcome:'handled'}});
   assert.equal(done.structuredContent.state,'completed');
+  // The bounded SDK exchange registers the reader before sending. Process an
+  // actual peer reply while the request waits, without a native wake reservation.
+  const request=exchange(pa,{inbox:'test-claude',handler_id:'requester',recipient:'test-codex',body:'question',idempotency_key:'exchange'});
+  // Wait deterministically for the service to publish the outbound request.
+  if(!store.pending('test-codex'))await new Promise(resolve=>{const changed=r=>{if(r==='test-codex'){store.off('changed',changed);resolve();}};store.on('changed',changed);});
+  const peerClaims=await other.callTool({name:'mail.claim',arguments:{recipient:'test-codex',handler_id:'peer'}});
+  const peerMessage=peerClaims.structuredContent.messages[0];
+  await other.callTool({name:'mail.complete',arguments:{id:peerMessage.id,claim_token:peerMessage.claim_token,generation:peerMessage.generation,outcome:'answered'}});
+  await other.callTool({name:'mail.send',arguments:{recipient:'test-claude',body:'reply',idempotency_key:'exchange-reply'}});
+  const answer=await request;assert.equal(answer.status,'messages');assert.equal(answer.messages[0].body,'reply');
+  assert.equal(store.status(config.principals.find(p=>p.id==='test-claude-pa'),{recipient:'test-claude'}).attendance,null);
+  const {id:replyId,claim_token:replyToken,generation:replyGeneration}=answer.messages[0];
+  await pa.callTool({name:'mail.complete',arguments:{id:replyId,claim_token:replyToken,generation:replyGeneration,outcome:'received'}});
+  await assert.rejects(exchange(pa,{inbox:'test-claude',handler_id:'requester',recipient:'test-claude',body:'not allowed',idempotency_key:'forbidden-exchange'}),/FORBIDDEN/);
+  assert.equal(store.status(config.principals.find(p=>p.id==='test-claude-pa'),{recipient:'test-claude'}).attendance,null);
   const escaped=await sender.callTool({name:'mail.send',arguments:{...args,idempotency_key:'escaped-limit',body:'\u0001'.repeat(65536)}});
   assert.equal(escaped.structuredContent.state,'pending');
   const tooLarge=await sender.callTool({name:'mail.send',arguments:{...args,idempotency_key:'byte-limit',body:'😀'.repeat(20000)}});

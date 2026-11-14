@@ -10,6 +10,9 @@ const claim={id:z.string().uuid(),claim_token:z.string().uuid(),generation:z.num
 const schemas={
   'mail.send':{recipient,kind:z.string().min(1).max(64).default('message'),body:z.string().max(65536),idempotency_key:z.string().min(1).max(200)},
   'mail.claim':{recipient,handler_id:z.string().min(1).max(100),limit:z.number().int().min(1).max(20).default(10),lease_s:z.number().int().min(1).max(300).default(300)},
+  'mail.attend':{recipient,handler_id:z.string().min(1).max(100),lease_s:z.number().int().min(1).max(120).default(60)},
+  'mail.unattend':{recipient,attendance_token:z.string().uuid()},
+  'mail.wait':{recipient,attendance_token:z.string().uuid(),timeout_ms:z.number().int().min(0).max(25000),limit:z.number().int().min(1).max(20).default(10),lease_s:z.number().int().min(1).max(300).default(300)},
   'mail.renew':{...claim,lease_s:z.number().int().min(1).max(300)},
   'mail.complete':{...claim,outcome:z.string().max(4096)},
   'mail.release':{...claim,work_started:z.boolean()},
@@ -26,6 +29,8 @@ const permissions={'mail.send':'send','mail.claim':'claim','mail.renew':'claim',
 const methods={'mail.send':'send','mail.claim':'claim','mail.renew':'renew','mail.complete':'complete','mail.release':'release','mail.status':'status','wake.wait':'wait','control.pause':'pause','control.inspect':'inspect','control.resolve':'resolve'};
 Object.assign(permissions,{'wake.reserve':'wake','wake.record':'wake','control.reset_wake':'admin'});
 Object.assign(methods,{'wake.reserve':'reserveWake','wake.record':'recordWake','control.reset_wake':'resetWake'});
+Object.assign(permissions,{'mail.attend':'claim','mail.unattend':'claim','mail.wait':'claim'});
+Object.assign(methods,{'mail.attend':'attend','mail.unattend':'unattend','mail.wait':'receive'});
 function equal(a,b) { const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length===bb.length && timingSafeEqual(aa,bb); }
 function reject(res,code,error) { res.writeHead(code,{'Content-Type':'application/json'});res.end(JSON.stringify({error})); }
 
@@ -54,7 +59,7 @@ export function createService(store,{principals,allowedHosts=['127.0.0.1','local
       parsed=JSON.parse(Buffer.concat(chunks).toString('utf8'));
     } catch {return reject(res,400,'INVALID_JSON');}
     if (active.size>=64) return reject(res,503,'BUSY');
-    const server=new McpServer({name:'ihcp3k',version:'0.2.0'});
+    const server=new McpServer({name:'ihcp3k',version:'0.3.0'});
     const abort=new AbortController();
     for (const [name,inputSchema] of Object.entries(schemas)) {
       if (!principal.permissions.includes(permissions[name])) continue;
