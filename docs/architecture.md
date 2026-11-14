@@ -16,7 +16,7 @@ flowchart LR
   end
   subgraph D["Docker service - host loopback port"]
     S[IHCP3K MCP service]
-    DB[("SQLite<br/>named volume")]
+    DB[("SQLite mail + directory<br/>named volume")]
     M["Maintenance timer<br/>(no inference)"]
     S --- DB
     M --- DB
@@ -35,11 +35,11 @@ Harness-to-service edges are MCP calls with per-principal scopes; the internal l
 
 ## Participants
 
-- **Receiving session:** owns one inbox. It may claim, complete, release and attend only that inbox. The initializer creates one receiving inbox per harness, conventionally its PA. A PA is an optional coordination role, not something the service needs.
+- **Receiving session:** owns one inbox. It may claim, complete, release and attend only that inbox. Operator-scoped enrolment creates receiving endpoints and separate session/wake credentials. The legacy static initializer creates one PA inbox per harness. A PA is an optional coordination role, not something the service needs.
 - **Send-only session:** can post to permitted inboxes, but cannot read, claim or suppress notifications.
 - **Wake adapter:** one per receiving inbox, holding a wake/status credential. It is configured by hand with the receiver's native thread or hosting session. It calls `wake.wait`, never claims, and never reads message bodies.
 
-Any endpoint configured with a permitted credential can communicate. Automatic session enrolment, a directory of sessions, and routing are future work.
+Any endpoint configured with a permitted credential can communicate. Version 0.4 adds a scoped SQLite directory and explicit registration through the shared skill. Registration stores attributed model/usage profiles and private native bindings; it does not create native chats or automatically start wake adapters. Routing remains future work.
 
 ## Two ways to receive
 
@@ -71,9 +71,15 @@ Any endpoint configured with a permitted credential can communicate. Automatic s
 
 ## Not implemented yet
 
-- automatic session enrolment, directory and routing;
+- automatic native session enrolment and task routing;
 - a supported auto-start for wake adapters;
 - reply correlation for each request (attendance covers the whole inbox);
 - session mirrors and handover checkpoints;
-- model discovery and routing;
+- automatic native model inventory and routing (registered catalogue discovery is implemented);
 - a resource scheduler (capacity-aware requests are a convention today, not a service feature).
+
+## Installation and directory
+
+The idempotent installer verifies container/runtime identity, authenticated health and the database owner lock before reuse. A new installation builds from a digest-pinned base and stores the resulting image ID. The shared skill uses one-use operator enrolment, per-endpoint credential hashes and revision-fenced registration. Discovery is ACL-filtered; native bindings and credential values are not returned. Observations carry age/provenance and do not grant execution authority. See [onboarding](onboarding.md).
+
+Deregistration revokes credentials and hides the endpoint without deleting unresolved mail. Restore disables registered endpoints and revokes their credentials, requiring explicit relink. Expired enrolment codes and old directory audit details are removed in bounded maintenance passes. The 0.4 real-harness cutover remains incomplete; see [validation](validation.md).

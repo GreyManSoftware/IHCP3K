@@ -29,7 +29,7 @@ try {
     principal(h+'-sender',{send:recipients});
     principal(h+'-waiter',{wake:[h+'-pa'],status:[h+'-pa']});
   }
-  principal('admin',{admin:recipients,status:recipients});
+  principal('admin',{admin:recipients,status:recipients,registry:recipients});
   fs.writeFileSync(path.join(dir,'service.json'),JSON.stringify(config,null,2)+'\n',{flag:'wx',mode:0o600});
   fs.writeFileSync(path.join(dir,'runtime.json'),JSON.stringify({name:'ihcp3k-live',port:43188,data_volume:'ihcp3k-live-data',backup_volume:'ihcp3k-backups',service_config:path.join(dir,'service.json')},null,2)+'\n',{flag:'wx',mode:0o600});
   console.log(`Created private runtime for ${harnesses.length} harness(es). No credentials printed; no harness settings changed.`);

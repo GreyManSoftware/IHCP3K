@@ -1,38 +1,17 @@
 # First-time setup and session roles
 
-**The transport does not need management threads. The current installer assumes one PA inbox per harness.** Those are different things.
+Version 0.4 introduces the shared [harness-interop skill](../skills/harness-interop/SKILL.md) and [installation workflow](onboarding.md). The isolated fresh-install rehearsal passed; the real two-harness reinstall remains incomplete. See [validation](validation.md).
 
-## What a new user does today
+1. With existing Node and Docker, the first installer creates private runtime state and a container built from a pinned base. Later installers verify identity and reuse that service.
+2. An authorized local operator issues a short-lived enrolment code for an exact harness/endpoint and permitted peer set. The administrator credential never goes in ordinary session configuration.
+3. Each harness inventories its models/capabilities without inference, records wake limitations and optional dated usage, then registers. A private binding records the chosen native thread; the service does not choose or create it.
+4. Discovery lists permitted active endpoints and attributed model/usage observations. Stale readings stay visible with their age; they do not authorize dispatch or paid overflow.
+5. Each receiving endpoint gets a distinct session credential and wake-only credential. Configure and verify its native adapter separately. Unknown harnesses can start with manual check mode.
 
-1. Provide existing Node.js 24.15+ and Docker, clone the repository, and give an agent `AGENT_SETUP.md`. Dependency installation and tests run in Docker.
-2. Choose a private runtime directory and participating harness names. The initializer creates an inbox and PA, sender and waiter credentials for each harness, plus an administrator credential. It creates no chats.
-3. Explicitly choose which existing threads manage those inboxes. Record native IDs; names alone are ambiguous. The Codex bridge's private `thread` setting identifies its destination. Claude's notification belongs to the session hosting its waiter.
-4. Connect native MCP, or use the SDK client where live reload is unavailable. Ordinary sessions receive send-only access in the default setup. Inbox-reading access belongs in a dedicated PA scope; sharing a project folder can share that configuration.
-5. Start the service and authorized wake adapters. Verify a harmless round trip reaches the intended threads, including after a service restart. Record process ownership and what survives closing the harness.
-6. Teach the selected sessions where canonical skills, project memory and handovers live. These remain outside the message database; installation does not merge them automatically.
+A PA is an optional coordination role. Ordinary sessions can message each other directly once explicitly enrolled and scoped; management threads are not elected or required by the service. Registration does not give every existing chat access to every other chat. Human authorization still governs each communication/task.
 
-This is an agent-assisted technical setup, not one-click onboarding. Native CLI connections and a live migration were verified; a separate fresh Windows installation probe was blocked and remains unverified. Automatic OS startup and app-closed wake are also unverified. An attached bridge depends on its owning session remaining open.
+Credentials restrict cooperative clients, not hostile processes with full access under the same OS account. Profiles are attributed data, not proof of entitlement or suitability. A listed endpoint need not be awake; discovery reports observed client/waiter activity and attendance separately.
 
-## Which sessions can communicate?
+Skills, agents and project memory remain in shared canonical files outside the database. Installation does not merge memories, transfer ownership or replicate sessions. Handovers still require source stop and destination acceptance.
 
-| Question | Current behavior |
-| --- | --- |
-| How is the PA selected? | The user/operator chooses and binds a native thread. No election or discovery exists. |
-| Must messages pass through a PA? | No service rule requires it. The default initializer happens to create only PA inboxes. |
-| Can an ordinary session send? | Yes, to recipients allowed by its credential. Shared send-only credentials identify the harness principal, not the individual native thread. |
-| Can it receive directly? | Only after its own inbox, claim scope and wake binding are explicitly configured. There is no self-registration workflow. |
-| Can it read another session's inbox? | Not through scoped MCP tools. Full-access processes sharing an OS account are not strongly isolated from each other's credential files. |
-
-## Recommended design
-
-Allow **any explicitly registered session** to talk directly to permitted peers. Make management a role, not a transport requirement. PAs remain useful for budgets, model routing, resource scheduling and handovers; ordinary collaboration should not require two extra PA turns.
-
-Next steps, not implemented by this release:
-
-- A registration flow asks the user to confirm a native session ID, creates a logical endpoint and a separate credential, and proves its wake binding with a canary message.
-- A directory exposes approved peers, supported message types, current wake capability and optional roles. A directory entry is not authority to execute a task.
-- Explicit communication scopes govern who can send to whom. No automatic access to every conversation or reuse of PA credentials for workers.
-- Endpoint lifecycle handles closed sessions, stale mappings, relinking and credential revocation. Messages remain durable when a receiver is offline.
-- Request/reply correlation and cancellation prevent an unrelated inbox message being mistaken for an answer. Today's bounded attendance lease suppresses inbox notifications; it does not provide correlation.
-
-The highest priorities are endpoint registration and reliable wake lifecycle. Automatically choosing a "manager" from thread titles would hide those gaps rather than solve them.
+Still manual: native session selection/binding, native configuration reload, adapter startup, allowance observation and actual task routing. Still unverified: app-closed wake and unattended OS-start recovery. Request-specific reply correlation is not implemented; active exchange can receive unrelated mail.

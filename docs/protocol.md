@@ -38,3 +38,23 @@ Register attendance **before** sending a request. While that lease is valid, `wa
 Attendance is ephemeral, lasts at most 120 seconds, and does not renew itself. Expiry or explicit release restores normal wake behavior; a service restart drops attendance immediately. Existing notification throttling and unresolved wake reservations still apply. Sender-only and waiter credentials cannot suppress another session's notifications. An already-reserved or queued doorbell cannot be recalled; the response flags that case. This is bounded inbox-wide suppression, not per-request reply correlation.
 
 The SDK client's local `exchange` helper wraps attend → send → bounded wait → unattend. It is not an additional server tool. It returns the send result and any claimed messages, never completes work automatically, and never retries a send under a new idempotency key.
+
+
+## Registered endpoints (0.4)
+
+The same SQLite owner stores the directory, hashed credentials, one-use enrolments and bounded audit history. `registry` is an offline operator permission. Dynamic session permissions are `send`, own-inbox `claim`/`status`, scoped `discover` and own-profile `profile`; a separate credential has only `wake` and own-inbox `status`.
+
+| Tool | Arguments and result |
+| --- | --- |
+| `directory.enroll` | Operator: `endpoint`, `harness`, `peers`, `expected_revision` (0 for new), `ttl_s` (30–3600). Returns a one-use secret; use the private-file CLI wrapper, never print it. |
+| `directory.register` | Enrolment credential: `profile`, private `binding`, client-generated `session_token` and `wake_token`. Tokens are stored locally before the request so an identical retry can reconcile a lost response. Returns endpoint/harness/revision, no secrets. |
+| `directory.refresh` | Own endpoint, expected revision and a complete public profile snapshot. Rejects older observations; increments revision. |
+| `directory.discover` | Permitted active endpoints only; `after` cursor and `limit` (1–100). Includes attributed models, advisory usage age/staleness and separate presence evidence. Never private bindings or tokens. |
+| `directory.inspect` | Operator: one `endpoint`. Returns revision, lifecycle state and mail counts to reconcile lost registration/unlink responses. |
+| `directory.deregister` | Own endpoint or operator, expected revision. Revokes credentials, hides endpoint, rejects new sends and quarantines claimed work. Pending bodies and dedup identities remain. |
+
+Relink uses a fresh operator enrolment at the current revision. It revokes old credentials and fences prior adapter reservations; uncertain native notifications require normal reconciliation. It does not replay interrupted effects. Credentials are checked again when scoped work executes. These scopes do not isolate hostile processes sharing the same OS account.
+
+Profiles and model suitability descriptions are untrusted, attributed data. Catalogue availability does not prove a model can execute now. Usage records retain their source and observation time; a passed reset timestamp does not reset a value automatically. No AI polling or automatic model dispatch is installed. Native wake binding and its lifetime remain adapter responsibilities.
+
+Schema version 4 includes the directory. Older binaries refuse it. Restore disables registered endpoints and revokes their credentials so a backup cannot silently resurrect access removed after that snapshot. Operator relink and restore-pause review are required.

@@ -36,7 +36,7 @@ export class Store extends EventEmitter {
     requireThat(major > 3 || (major === 3 && (minor > 51 || minor === 51 && patch >= 3)), 'SQLITE_VERSION_UNSUPPORTED');
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=2000;');
     const schema = this.db.prepare('PRAGMA user_version').get().user_version;
-    requireThat(schema >= 0 && schema <= 3, 'SCHEMA_VERSION_UNSUPPORTED');
+    requireThat(schema >= 0 && schema <= 4, 'SCHEMA_VERSION_UNSUPPORTED');
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY, sender TEXT NOT NULL, recipient TEXT NOT NULL,
@@ -72,7 +72,8 @@ export class Store extends EventEmitter {
       recipient TEXT PRIMARY KEY, generation INTEGER NOT NULL DEFAULT 0,
       state TEXT NOT NULL CHECK(state IN ('idle','reserved','queued','uncertain')),
       token_hash TEXT, deadline INTEGER, updated_at INTEGER NOT NULL, detail TEXT
-    ); PRAGMA user_version=3;`);
+    );`);
+    if(schema<3)this.db.exec('PRAGMA user_version=3;');
     this.db.exec("UPDATE wake_dispatch SET state='uncertain',deadline=NULL WHERE state='reserved';");
     // After service restart, a former handler might still have performed an external effect.
     this.db.exec("UPDATE messages SET state='reconcile' WHERE state='claimed'; UPDATE outbox SET state='reconcile' WHERE state='claimed';");
@@ -88,9 +89,10 @@ export class Store extends EventEmitter {
   }
   recipient(id) { requireThat(this.recipients.has(id), 'UNKNOWN_RECIPIENT'); }
   scope(principal, permission, recipient) {
-    requireThat(principal?.permissions?.includes(permission), 'FORBIDDEN');
+    requireThat(principal?.permissions?.includes(permission) && (!this.directory || this.directory.active(principal)), 'FORBIDDEN');
+    if(permission==='send'||permission==='wake'||permission==='claim')requireThat(!this.directory||this.directory.allowedRecipient(recipient),'ENDPOINT_DISABLED');
     this.recipient(recipient);
-    requireThat((principal.scopes?.[permission] ?? principal.recipients ?? []).includes(recipient), 'FORBIDDEN');
+    requireThat((principal.scopes?.[permission] ?? principal.recipients ?? []).includes(recipient) || (['admin','status'].includes(permission)&&principal.permissions.includes('registry')), 'FORBIDDEN');
   }
   paused(recipient) { return !!this.db.prepare('SELECT 1 FROM pauses WHERE recipient=? LIMIT 1').get(recipient); }
   pending(recipient) { return this.db.prepare("SELECT count(*) AS n FROM messages WHERE recipient=? AND state='pending'").get(recipient).n; }
@@ -357,6 +359,10 @@ export class Store extends EventEmitter {
       for (const {id} of expired) {
         this.db.prepare("UPDATE messages SET state='reconcile',deadline=NULL WHERE id=?").run(id);
         this.db.prepare("UPDATE outbox SET state='reconcile' WHERE message_id=?").run(id);
+      }
+      if(this.directory){
+        this.db.prepare('DELETE FROM enrolments WHERE hash IN (SELECT hash FROM enrolments WHERE expires<=? LIMIT 100)').run(at);
+        this.db.prepare('DELETE FROM directory_audit WHERE id IN (SELECT id FROM directory_audit WHERE at<? LIMIT 100)').run(at-90*86400000);
       }
       const compacted=this.db.prepare("UPDATE messages SET outcome=NULL WHERE id IN (SELECT id FROM messages WHERE state='completed' AND completed_at<? AND outcome IS NOT NULL LIMIT 100)").run(at-90*86400000).changes;
       this.db.prepare("DELETE FROM outbox WHERE message_id IN (SELECT message_id FROM outbox WHERE state='done' LIMIT 100)").run();

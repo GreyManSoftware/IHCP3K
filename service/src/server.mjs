@@ -4,6 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import { ServiceError } from './store.mjs';
+import { Directory } from './directory.mjs';
 
 const recipient=z.string().min(1).max(100);
 const claim={id:z.string().uuid(),claim_token:z.string().uuid(),generation:z.number().int().positive()};
@@ -25,28 +26,41 @@ const schemas={
   'control.inspect':{recipient,limit:z.number().int().min(1).max(20).default(10)},
   'control.resolve':{id:z.string().uuid(),expected_generation:z.number().int().nonnegative(),action:z.enum(['requeue','abandon']),reason:z.string().min(1).max(4096)}
 };
+const profile=z.record(z.string(),z.unknown());
+Object.assign(schemas,{
+  'directory.inspect':{endpoint:recipient},
+  'directory.enroll':{endpoint:recipient,harness:recipient,peers:z.array(recipient).max(100),expected_revision:z.number().int().nonnegative().default(0),ttl_s:z.number().int().min(30).max(3600).default(600)},
+  'directory.register':{profile,binding:profile.default({}),session_token:z.string(),wake_token:z.string()},
+  'directory.refresh':{endpoint:recipient,expected_revision:z.number().int().positive(),profile},
+  'directory.discover':{after:z.string().max(100).default(''),limit:z.number().int().min(1).max(100).default(20)},
+  'directory.deregister':{endpoint:recipient,expected_revision:z.number().int().positive()}
+});
 const permissions={'mail.send':'send','mail.claim':'claim','mail.renew':'claim','mail.complete':'claim','mail.release':'claim','mail.status':'status','wake.wait':'wake','control.pause':'admin','control.inspect':'admin','control.resolve':'admin'};
 const methods={'mail.send':'send','mail.claim':'claim','mail.renew':'renew','mail.complete':'complete','mail.release':'release','mail.status':'status','wake.wait':'wait','control.pause':'pause','control.inspect':'inspect','control.resolve':'resolve'};
 Object.assign(permissions,{'wake.reserve':'wake','wake.record':'wake','control.reset_wake':'admin'});
 Object.assign(methods,{'wake.reserve':'reserveWake','wake.record':'recordWake','control.reset_wake':'resetWake'});
 Object.assign(permissions,{'mail.attend':'claim','mail.unattend':'claim','mail.wait':'claim'});
 Object.assign(methods,{'mail.attend':'attend','mail.unattend':'unattend','mail.wait':'receive'});
+Object.assign(permissions,{'directory.enroll':'registry','directory.register':'enroll','directory.refresh':'profile','directory.discover':'discover','directory.deregister':'profile'});
+permissions['directory.inspect']='registry';
+const directoryMethods={'directory.inspect':'inspect','directory.enroll':'issue','directory.register':'register','directory.refresh':'refresh','directory.discover':'discover','directory.deregister':'deregister'};
 function equal(a,b) { const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length===bb.length && timingSafeEqual(aa,bb); }
 function reject(res,code,error) { res.writeHead(code,{'Content-Type':'application/json'});res.end(JSON.stringify({error})); }
 
-export function createService(store,{principals,allowedHosts=['127.0.0.1','localhost'],allowedOrigins=[],mode='synthetic'}) {
+export function createService(store,{principals,allowedHosts=['127.0.0.1','localhost'],allowedOrigins=[],mode='synthetic',serviceId=null}) {
   if (!Array.isArray(principals) || principals.length===0 || principals.some(p=>!p.token || p.token.length<24)) throw Error('Invalid principal configuration');
   const active=new Set();
+  const directory=new Directory(store);
   const httpServer=http.createServer(async (req,res)=>{
     const host=req.headers.host;
     if (!host || !allowedHosts.some(h=>host===h || host.startsWith(h+':'))) return reject(res,403,'HOST_REJECTED');
     if (req.headers.origin && !allowedOrigins.includes(req.headers.origin)) return reject(res,403,'ORIGIN_REJECTED');
     const auth=req.headers.authorization||'';
-    const principal=principals.find(p=>equal(auth,`Bearer ${p.token}`));
+    const principal=principals.find(p=>equal(auth,`Bearer ${p.token}`)) ?? (auth.startsWith('Bearer ')?directory.authenticate(auth.slice(7)):null);
     if (!principal) return reject(res,401,'UNAUTHORIZED');
     if (req.url==='/health' && req.method==='GET') {
       res.writeHead(200,{'Content-Type':'application/json'});
-      return res.end(JSON.stringify({status:mode,instance_id:store.instanceId,sqlite:store.sqliteVersion}));
+      return res.end(JSON.stringify({status:mode,instance_id:store.instanceId,sqlite:store.sqliteVersion,protocol_version:'0.4.0',service_id:serviceId,owner_lock:!!store.owner}));
     }
     if (req.url!=='/mcp') return reject(res,404,'NOT_FOUND');
     if (req.method!=='POST') {res.setHeader('Allow','POST');return reject(res,405,'METHOD_NOT_ALLOWED');}
@@ -59,14 +73,15 @@ export function createService(store,{principals,allowedHosts=['127.0.0.1','local
       parsed=JSON.parse(Buffer.concat(chunks).toString('utf8'));
     } catch {return reject(res,400,'INVALID_JSON');}
     if (active.size>=64) return reject(res,503,'BUSY');
-    const server=new McpServer({name:'ihcp3k',version:'0.3.0'});
+    const server=new McpServer({name:'ihcp3k',version:'0.4.0'});
     const abort=new AbortController();
     for (const [name,inputSchema] of Object.entries(schemas)) {
-      if (!principal.permissions.includes(permissions[name])) continue;
+      if (!principal.permissions.includes(permissions[name]) && !(name==='directory.deregister'&&principal.permissions.includes('registry'))) continue;
       server.registerTool(name,{description:`IHCP3K coordination ${name}`,inputSchema},async (args,extra)=>{
         try {
           const signal=AbortSignal.any([abort.signal,extra.signal]);
-          const value=await store[methods[name]](principal,args,signal);
+          if(!directory.active(principal))throw new ServiceError('REVOKED');
+          const value=directoryMethods[name]?await directory[directoryMethods[name]](principal,args):await store[methods[name]](principal,args,signal);
           const structured=Array.isArray(value)?{messages:value}:value;
           return {content:[{type:'text',text:JSON.stringify(structured)}],structuredContent:structured};
         } catch(e) {

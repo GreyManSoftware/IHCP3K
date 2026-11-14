@@ -1,4 +1,4 @@
-const permissions = new Set(['send', 'claim', 'status', 'wake', 'admin']);
+const permissions = new Set(['send', 'claim', 'status', 'wake', 'admin', 'registry']);
 const name = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 // Validate before opening the database or listening. Never include values in errors.

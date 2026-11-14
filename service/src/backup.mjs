@@ -36,6 +36,11 @@ export function restore(source,destination,{sha256,recipients}) {
   let db;
   try {
     db=new DatabaseSync(stage);check(db);
+    if(db.prepare("SELECT 1 FROM sqlite_master WHERE name='endpoints'").get()){
+      recipients=[...new Set([...recipients,...db.prepare('SELECT id FROM endpoints').all().map(r=>r.id)])];
+      // A restored credential may have been revoked since the snapshot: relink explicitly.
+      db.exec('UPDATE credentials SET revoked=1; DELETE FROM enrolments; UPDATE endpoints SET active=0,revision=revision+1;');
+    }
     const recorded=db.prepare('SELECT DISTINCT recipient FROM messages UNION SELECT recipient FROM pauses').all();
     if(recorded.some(r=>!recipients.includes(r.recipient)))throw Error('RESTORE_RECIPIENT_MISMATCH');
     db.exec('BEGIN IMMEDIATE');

@@ -50,3 +50,24 @@ test('official SDK clients authenticate, wait, send, claim and complete with con
   const hostileOrigin=await fetch(url,{method:'POST',headers:{Authorization:`Bearer ${config.principals[0].token}`,Origin:'https://evil.invalid'}});assert.equal(hostileOrigin.status,403);
   const badBody=await fetch(url,{method:'POST',headers:{Authorization:`Bearer ${config.principals[0].token}`,'Content-Type':'application/json'},body:'{'});assert.equal(badBody.status,400);
 });
+
+
+test('MCP registration returns no session secrets and native SDK discovery enforces scopes',async t=>{
+ const {randomBytes}=await import('node:crypto');const token=()=>randomBytes(32).toString('base64url');
+ const admin={id:'operator',token:token(),permissions:['registry'],scopes:{registry:['bootstrap']}};
+ const store=new Store(':memory:',{recipients:['bootstrap']});const server=createService(store,{principals:[admin]});
+ const address=await server.listen(),url=new URL(`http://127.0.0.1:${address.port}/mcp`),clients=[];
+ t.after(async()=>{for(const c of clients)await c.close();await server.close();store.close();});
+ async function client(secret){const c=new Client({name:'synthetic',version:'1'});await c.connect(new StreamableHTTPClientTransport(url,{requestInit:{headers:{Authorization:`Bearer ${secret}`}}}));clients.push(c);return c;}
+ const {call}=await import('../src/client.mjs');const op=await client(admin.token);
+ const grant=await call(op,'directory.enroll',{endpoint:'test-a',harness:'test-harness',peers:['test-a']});
+ const enrol=await client(grant.enrolment_token),sessionToken=token(),wakeToken=token();
+ const profile={label:'Test',source:'synthetic',observed_at:new Date().toISOString(),fresh_for_s:300,models:[],usage:[],wake:{type:'manual',lifetime:'manual only',closed_app:'unknown',human_fallback:'manual check'}};
+ const registered=await call(enrol,'directory.register',{profile,session_token:sessionToken,wake_token:wakeToken});
+ assert.equal(registered.endpoint,'test-a');assert.ok(!JSON.stringify(registered).includes(sessionToken));
+ const session=await client(sessionToken);assert.equal((await call(session,'directory.discover',{})).entries[0].profile.label,'Test');
+ assert.ok(!(await session.listTools()).tools.some(t=>t.name==='directory.enroll'));
+ await call(session,'mail.send',{recipient:'test-a',body:'proof',idempotency_key:'proof'});
+ await call(session,'directory.deregister',{endpoint:'test-a',expected_revision:1});
+ await assert.rejects(call(session,'directory.discover',{}));
+});

@@ -1,5 +1,15 @@
 # Validation
 
+## 0.4 candidate: installation and discovery
+
+The current implementation passes 58 tests: 28 service tests, 16 waiter tests, one native queue test and 13 legacy tests. New coverage includes one-use enrolment, scoped discovery, revocation, relink, stale observations, directory persistence and restored-credential revocation. Targeted directory/HTTP tests also passed after adding operator inspection.
+
+A dedicated packaged-container rehearsal passed fresh installation, idempotent reuse, occupied-port rejection, three synthetic harness registrations, discovery, direct mail, completion and unlink. A separate backup and restore completed. The service image is built locally from a pinned base; it is not a published prebuilt image.
+
+The real two-harness reinstall is **not complete**. Codex registered against a staged new runtime. Claude stopped its old adapters and removed its native entry, but execution policy rejected the old-service stop and metadata cutover batch. Codex restored its prior native configuration and removed the temporary old-service pauses. Claude rollback was requested through the old durable inbox, without a running wake adapter. No claim of unattended wake or full clean installation should be inferred from the synthetic rehearsal.
+
+## Previous release evidence
+
 Version 0.3.0 adds bounded receiver attendance and direct request/reply waiting. Checked on Windows with Docker, Node 24.15.0 and SQLite 3.51.3. The Docker base is pinned by digest in the runners.
 
 `node scripts/dev.mjs test` passed **52 tests**:

@@ -18,6 +18,8 @@ If the host has a shared full-suite lock, set `IHCP3K_TEST_LOCK` to it. The runn
 
 ## 2. Create private runtime state
 
+For a new installation, use [install/register/discover](docs/onboarding.md) and the shared [harness-interop skill](skills/harness-interop/SKILL.md). It provisions per-session credentials and stores the directory in SQLite. The static initializer below remains for existing installations; it does not provide the new registration workflow.
+
 Choose a new private directory **outside the checkout**. Do not put credentials, mail, account catalogues, session IDs or project memory in a public repository.
 
 ```sh
