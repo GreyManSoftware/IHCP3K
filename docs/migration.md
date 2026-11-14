@@ -2,7 +2,15 @@
 
 The importer is an explicit, offline transition from the earlier schema-0 mailbox. The database remains the only live authority after cutover. It never watches a directory or continuously mirrors files.
 
-Pass a UTF-8 JSON file to `scripts/ops.mjs <runtime.json> import <manifest.json>` after stopping the service:
+After freezing every legacy writer and consumer, generate a private snapshot:
+
+```sh
+node adapters/claude-legacy/src/export.mjs --mail-root /private/old-mail --recipients alpha-pa,beta-pa --allowed-senders alpha-pa,beta-pa --out /private/snapshot.json
+```
+
+The exporter reads twice and refuses changed input, unsafe filenames, symlinks, invalid UTF-8, missing marked records and output overwrites. This check detects changes during the reads; it does not replace the agreed writer freeze. It never changes the originals. The printed summary and manifest hash are evidence for the cutover owner to verify.
+
+Pass that UTF-8 JSON file to `scripts/ops.mjs <runtime.json> import <manifest.json>` after stopping the service:
 
 ```json
 {
@@ -16,17 +24,27 @@ Pass a UTF-8 JSON file to `scripts/ops.mjs <runtime.json> import <manifest.json>
       "sha256": "<SHA-256 of those source bytes>",
       "receipt": "<exact original receipt JSON text, or null>"
     }
+  ],
+  "processed_lists": [
+    {
+      "recipient": "beta-pa",
+      "source": "original-message-id.json\n",
+      "sha256": "<SHA-256 of the exact processed-list bytes>",
+      "format": "claude-watch-filenames-v1"
+    }
   ]
 }
 ```
 
 The source envelope must have `schema:0`, a filename-matching `message_id`, an allowed `from`, and `to` matching a registered recipient. A receipt must name that message and match the source hash through `source_sha256` or the earlier `sha256` field. If both hash fields exist they must agree.
 
-Completed, rejected and blocked receipts become completed tombstones with no body. Missing or nonterminal receipts become `reconcile`, never pending. Invalid identity, changed input, receipt mismatch or capacity failure rolls back the whole import. Repeating an unchanged manifest is idempotent.
+Completed, rejected and blocked receipts become completed tombstones with no body. In version 0.2.1+, an exact filename in that recipient's verified processed list also becomes a completed tombstone, with distinct `legacy-processed-list` provenance. Duplicate marker lines and blank lines are harmless; padded names, paths, missing records and conflicting nonterminal receipts are rejected. Source and list hashes remain in metadata even after outcome-detail cleanup.
+
+Unmarked records without terminal receipts become `reconcile`, never pending. Invalid identity, changed input, receipt mismatch or capacity failure rolls back the whole import. Repeating an unchanged manifest is idempotent. Changing the terminal evidence of an already-imported record fails for explicit reconciliation; reimporting cannot silently change its state.
 
 The importer accepts at most 10,000 records, source records up to 1 MiB and normalized message bodies up to 65,536 bytes. Reject and investigate larger records rather than truncating history silently.
 
-Some older consumers recorded handled filenames in a `.processed` list instead of hash-bound receipts. This importer does not yet accept that format. Preserve and hash the list with the source snapshot, obtain the owning consumer's reconciliation, and add an explicitly tested migration path before cutover. Do not invent historical hash receipts, discard the list or replay already-handled work.
+The `.processed` format records only filenames. Its snapshot hash proves which list was imported; it does not prove that the old consumer recorded per-message hashes or verified message contents. Obtain the owning consumer's reconciliation before using it. Do not invent stronger historical receipts or replay already-handled work.
 
 Keep the original snapshot private. Its exact bytes matter. A cutover coordinator must freeze old writers and consumers, compare counts/hashes, review uncertain records and change the sender route once. The importer does not itself stop other processes or switch a caller's transport.
 

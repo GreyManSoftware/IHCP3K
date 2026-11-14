@@ -139,9 +139,9 @@ For the legacy schema-0 mailbox:
 
 1. Agree a single cutover owner and stop legacy writers/consumers at a barrier.
 2. Save an immutable snapshot of source messages and receipts with their hashes.
-3. Produce the manifest described in `docs/migration.md`.
+3. Run the read-only exporter in `adapters/claude-legacy/src/export.mjs` as described in `docs/migration.md`. It preserves original hash-bound receipts and the separate `.processed` handled-filename format.
 4. Stop the service; run `ops ... import manifest.json`. The owner lock refuses concurrent import.
-5. Terminal receipts become completed tombstones. Every other imported record is quarantined.
+5. Terminal receipts and verified per-recipient handled markers become completed tombstones with their actual provenance. Every other imported record is quarantined. Do not fabricate historical hash receipts from a filename list.
 6. Verify counts, hashes and duplicate behavior. Switch the routing authority once, then resume consumers.
 7. Retain the old snapshot as evidence. Do not dual-write or fall back to files when MCP is unavailable.
 

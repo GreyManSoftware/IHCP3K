@@ -1,0 +1,10 @@
+{
+  "name": "claude-legacy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only snapshot exporter: freezes a schema-0 file mailbox (envelopes, receipts, claude-watch processed lists) into an IHCP3K legacy import manifest.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

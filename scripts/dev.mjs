@@ -36,6 +36,7 @@ try {
       tooling('service','ihcp3k-service-deps','npm test');
       tooling('adapters/claude-waiter','ihcp3k-waiter-deps','npm test');
       docker(['run','--rm','--cpus','2','--mount',`type=bind,source=${path.join(root,'scripts')},target=/scripts,readonly`,image,'node','--test','/scripts/native-queue.test.mjs']);
+      docker(['run','--rm','--cpus','2','--mount',`type=bind,source=${root},target=/repo,readonly`,image,'node','--test','/repo/adapters/claude-legacy/test/*.test.mjs']);
     } finally {if(fd!==undefined){fs.closeSync(fd);fs.unlinkSync(lockPath);}}
   } else if(action==='start') {
     fs.mkdirSync(path.join(root,'service','node_modules'),{recursive:true});
