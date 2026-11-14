@@ -108,7 +108,7 @@ For Codex, create a **private** bridge configuration:
 }
 ```
 
-Run `node scripts/codex-bridge.mjs /private/bridge.json`. On Windows, launch hidden. It performs bounded waits, reserves one durable notification, calls `codex queue --thread ... --message ...` **without `--resume`**, and records queued or uncertain delivery. It never calls a model itself. Reconnects back off; queued notifications coalesce until the PA claims mail. Start only one bridge per inbox. It does not register a scheduled task or survive an OS restart automatically.
+Run `node scripts/codex-bridge.mjs /private/bridge.json` using an authorized process lifecycle. An attached harness task lasts only while its owning session remains open; record that owner and limitation. A separately approved Windows background launch should be hidden. It performs bounded waits, reserves one durable notification, calls `codex queue --thread ... --message ...` **without `--resume`**, and records queued or uncertain delivery. It never calls a model itself. Reconnects back off; queued notifications coalesce until the PA claims mail. Start only one bridge per inbox. It does not register a scheduled task or survive an OS restart automatically. If execution policy rejects an action, preserve the failure and seek a supported resolution; do not disguise or delegate the denied action.
 
 Claude uses the background waiter described in its guide. A process completion is useful only if the harness actually surfaces it to the correct PA. App-closed delivery is unverified; advertise it as such. Do not substitute periodic AI polling.
 
@@ -144,6 +144,8 @@ For the legacy schema-0 mailbox:
 5. Terminal receipts and verified per-recipient handled markers become completed tombstones with their actual provenance. Every other imported record is quarantined. Do not fabricate historical hash receipts from a filename list.
 6. Verify counts, hashes and duplicate behavior. Switch the routing authority once, then resume consumers.
 7. Retain the old snapshot as evidence. Do not dual-write or fall back to files when MCP is unavailable.
+
+Disable retired senders and watchers explicitly so stale callers fail with migration guidance. Record the sole live endpoint, runtime owner, backup and cutover checkpoint privately. Historical copies may be deleted when the owner requests it, including export files and relevant backups; retain the service's minimal duplicate-protection records. Report failed deletions honestly. See [the cutover checklist](docs/cutover.md).
 
 Cleanup: completed bodies disappear immediately; outcome/audit details compact after 90 days; dedup identities remain. Pending and uncertain records are not discarded. Backups have **manual retention** in this release and may retain old bodies. Monitor volume usage; the pending limit is not a total disk quota.
 
