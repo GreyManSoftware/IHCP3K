@@ -33,7 +33,7 @@ Plain prompts stay in the current session. IHCP3K does not silently route work, 
 
 Give your assistant [AGENT_SETUP.md](AGENT_SETUP.md) and the [harness-interop skill](skills/harness-interop/SKILL.md). **First install must ask where to put private runtime state before writing it.** Setup also records native bindings, model evidence, permissions and worker retention. Native configuration is prepared for explicit setup, never silently installed.
 
-For a fresh install, use the prebuilt ZIP on [the v0.5.0 release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v0.5.0) and the agent guide above. It needs existing Node 24.15+, but no Docker at runtime.
+For a fresh install, use the prebuilt ZIP on [the v0.5.1 release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v0.5.1) and the agent guide above. It needs existing Node 24.15+, but no Docker at runtime.
 
 For a source checkout without prebuilt bundles, Docker builds them:
 
