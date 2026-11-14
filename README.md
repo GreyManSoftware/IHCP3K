@@ -70,6 +70,14 @@ Use harness-interop: /discover sessions
 /remote_prompt Claude Ask the review agent to do ABC
 ```
 
+You can also ask in plain language:
+
+> Ask Codex if \<Session\> knows about ABC.
+
+> Ask Claude to have the review agent check this design.
+
+Replace `<Session>` with the chat's name, for example: “Ask Codex if the backend session knows about the login timeout.” The skill finds the destination and brings the reply back here. No slash command needed.
+
 The primary form is `/remote_prompt <harness> <request>`. If the app intercepts slash commands, prefix it with `Use harness-interop:`. The agent handles internal session addresses. See [all modes and terminal usage](docs/usage.md) for more.
 
 ## How it connects
