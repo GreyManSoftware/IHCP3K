@@ -1,0 +1,11 @@
+{
+  "synthetic": true,
+  "recipients": ["test-claude", "test-codex"],
+  "principals": [
+    {"id":"test-sender","token":"synthetic-sender-token-not-a-secret-0001","permissions":["send"],"recipients":["test-claude","test-codex"]},
+    {"id":"test-claude-pa","token":"synthetic-claude-pa-token-not-a-secret-0002","permissions":["claim","status"],"recipients":["test-claude"]},
+    {"id":"test-codex-pa","token":"synthetic-codex-pa-token-not-a-secret-0003","permissions":["claim","status"],"recipients":["test-codex"]},
+    {"id":"test-waiter","token":"synthetic-waiter-token-not-a-secret-0004","permissions":["wake","status"],"recipients":["test-claude"]},
+    {"id":"test-admin","token":"synthetic-admin-token-not-a-secret-0005","permissions":["admin","status"],"recipients":["test-claude","test-codex"]}
+  ]
+}

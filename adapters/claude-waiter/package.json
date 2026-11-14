@@ -1,0 +1,17 @@
+{
+  "name": "claude-waiter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Claude PA wake adapter: an in-session background waiter that calls the coordination service's wake.wait MCP tool and exits when work is pending.",
+  "scripts": {
+    "build": "esbuild src/waiter.mjs --bundle --platform=node --target=node24 --format=esm --outfile=dist/claude-waiter.mjs --banner:js=\"import{createRequire}from'node:module';const require=createRequire(import.meta.url);\"",
+    "test": "node --test --test-concurrency=4 test/*.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

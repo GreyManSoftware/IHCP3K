@@ -1,0 +1,36 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { Store } from '../src/store.mjs';
+import { createService } from '../src/server.mjs';
+const config=JSON.parse(readFileSync(new URL('../fixture/config.json',import.meta.url)));
+test('official SDK clients authenticate, wait, send, claim and complete with concurrent dedup',async t=>{
+  const store=new Store(':memory:',{recipients:config.recipients});
+  const server=createService(store,{principals:config.principals});
+  const address=await server.listen();const url=`http://127.0.0.1:${address.port}/mcp`;
+  const clients=[];
+  t.after(async()=>{for(const c of clients)await c.close();await server.close();store.close();});
+  async function connect(id){const p=config.principals.find(p=>p.id===id);const c=new Client({name:id,version:'0.1.0'});await c.connect(new StreamableHTTPClientTransport(new URL(url),{requestInit:{headers:{Authorization:`Bearer ${p.token}`}}}));clients.push(c);return c;}
+  const sender=await connect('test-sender'),waiter=await connect('test-waiter'),pa=await connect('test-claude-pa'),other=await connect('test-codex-pa');
+  const toolNames=(await sender.listTools()).tools.map(x=>x.name);assert.deepEqual(toolNames,['mail.send']);
+  const wait=waiter.callTool({name:'wake.wait',arguments:{recipient:'test-claude',timeout_ms:1000}});
+  const args={recipient:'test-claude',body:'synthetic integration message',idempotency_key:'same'};
+  const sends=await Promise.all(Array.from({length:4},()=>sender.callTool({name:'mail.send',arguments:args})));
+  assert.equal(new Set(sends.map(x=>x.structuredContent.id)).size,1);
+  assert.equal((await wait).structuredContent.status,'pending');
+  const forbidden=await other.callTool({name:'mail.claim',arguments:{recipient:'test-claude',handler_id:'wrong'}});assert.equal(forbidden.isError,true);
+  const claims=await Promise.all([pa.callTool({name:'mail.claim',arguments:{recipient:'test-claude',handler_id:'one'}}),pa.callTool({name:'mail.claim',arguments:{recipient:'test-claude',handler_id:'two'}})]);
+  const messages=claims.flatMap(x=>x.structuredContent.messages);assert.equal(messages.length,1);
+  const {id,claim_token,generation}=messages[0];
+  const done=await pa.callTool({name:'mail.complete',arguments:{id,claim_token,generation,outcome:'handled'}});
+  assert.equal(done.structuredContent.state,'completed');
+  const escaped=await sender.callTool({name:'mail.send',arguments:{...args,idempotency_key:'escaped-limit',body:'\u0001'.repeat(65536)}});
+  assert.equal(escaped.structuredContent.state,'pending');
+  const tooLarge=await sender.callTool({name:'mail.send',arguments:{...args,idempotency_key:'byte-limit',body:'😀'.repeat(20000)}});
+  assert.equal(tooLarge.isError,true);
+  const missingAuth=await fetch(url,{method:'POST'});assert.equal(missingAuth.status,401);
+  const hostileOrigin=await fetch(url,{method:'POST',headers:{Authorization:`Bearer ${config.principals[0].token}`,Origin:'https://evil.invalid'}});assert.equal(hostileOrigin.status,403);
+  const badBody=await fetch(url,{method:'POST',headers:{Authorization:`Bearer ${config.principals[0].token}`,'Content-Type':'application/json'},body:'{'});assert.equal(badBody.status,400);
+});

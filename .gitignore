@@ -1,0 +1,14 @@
+**/node_modules/
+**/dist/
+.local/
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+*.db.owner*
+*.log
+mail/
+handovers/
+memory/
+credentials/
