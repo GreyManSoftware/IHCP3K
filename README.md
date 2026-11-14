@@ -1,43 +1,44 @@
-# Inter-Harness Communication Protocol 3000
+# IHCP3K
 
-**IHCP3K** lets local AI assistants exchange messages without losing track of what was read, claimed or completed. It uses MCP, a small Docker service and SQLite. Claude and Codex are the first tested clients.
+**Inter-Harness Communication Protocol 3000** connects AI assistants running in different harnesses. It gives them durable messages and a way to notify each other, using MCP and a small Docker service with SQLite. Claude and Codex are the first tested clients.
 
-## What it does
+## Why use it?
 
-- Keeps messages across restarts, with duplicate protection and explicit completion.
-- Gives configured receiving sessions access to their own inboxes; other sessions can have send-only access.
-- Includes a native queue adapter for Codex and a background waiter for Claude.
-- Suppresses new doorbells during a bounded active reply wait; ordinary notifications resume when waiting ends.
-- Cleans up completed message bodies without forgetting their duplicate identities.
-- Provides backups, cautious restores and an importer for the earlier file mailbox.
+If you use more than one AI subscription, you may want to move work to the harness with allowance left, choose a different model for a particular job, or continue a project in another app. IHCP3K provides the messaging foundation. The broader workflows below are still being designed.
 
-**Experimental release.** Native CLI connections are tested. Desktop reload and wake behavior depend on the harness and version. Automatic model selection, resource scheduling and session handover are not implemented by the service yet.
+| Scenario | Available today | Planned |
+|---|---|---|
+| Spread work across subscriptions | Send an authorized request to a configured peer; choose the destination yourself. | An advisory usage view, with source and age, to help choose a harness with headroom. |
+| Use different models for different jobs | Exchange requests and results between configured Claude and Codex sessions. | Register accessible models, discover their capabilities and make informed routing decisions. |
+| Hand over through your PAs | Send a handover request; the agents still verify the checkpoint, permissions and ownership themselves. | Integrated session and handover records. |
+| Coordinate GPU and CPU work | Exchange resource requests and decisions; maintain the allocation ledger separately. | Service-backed capacity scheduling. |
+| Let sessions talk directly | Manually configure each receiving inbox, scoped credential and wake adapter. A PA relay is optional. | A shared skill with register, discover, send and check modes. |
 
-## Try it
+**Allowances stay separate.** IHCP3K does not pool or transfer tokens, supply inference, or authorize paid overflow. Choosing a peer does not automatically dispatch work or change models.
 
-You need an existing Node.js 24.15+ installation and Docker. Dependencies and build tools stay in Docker volumes.
+## What works now
+
+- Messages survive restarts, with duplicate protection, fenced claims and explicit completion.
+- Scoped credentials restrict which inboxes a client can send to or read.
+- A Codex queue bridge and a Claude background waiter provide native notifications.
+- Bounded active reply waits suppress new doorbells. Already queued notifications cannot be recalled.
+- Completed message bodies are cleared while duplicate identities remain. Backup, restore and legacy import tools are included.
+
+**Experimental.** Native CLI connections are tested. Desktop wake depends on the harness and version; closed-app wake and automatic startup remain unverified. Registration, discovery, the advisory usage table and further notification reductions are design-stage features.
+
+## Set it up
+
+For a real installation, give your assistant [AGENT_SETUP.md](AGENT_SETUP.md). It covers setup, daily use, recovery, shared skills and memory, and adapting an unfamiliar harness. You choose the receiving threads; installation does not create or elect management chats. Private mail, credentials and session mappings stay outside the repository.
+
+To try the synthetic demo, use an existing Node.js 24.15+ installation and Docker:
 
 ```sh
 node scripts/dev.mjs test
 node scripts/dev.mjs start
 ```
 
-This starts a synthetic demo on `127.0.0.1:43187`. Its public test credentials are unsuitable for real conversations. Stop it with `node scripts/dev.mjs stop`.
+It runs on `127.0.0.1:43187` with public test credentials, unsuitable for real conversations. Stop it with `node scripts/dev.mjs stop`. Dependencies and build tools stay in Docker volumes.
 
-For a real setup, give your assistant [AGENT_SETUP.md](AGENT_SETUP.md). It covers installation, daily use, recovery, shared knowledge and adding an unfamiliar harness. Nothing installs itself or changes your harness settings just by cloning this repo.
+[Architecture](docs/architecture.md) · [Protocol](docs/protocol.md) · [Setup and session roles](docs/first-run-review.md) · [Validation](docs/validation.md) · [Security](SECURITY.md)
 
-## Using it
-
-Once both sides are linked, ask a configured session to send work to a permitted peer. The recipient checks the request against your permissions, claims the message and records the outcome. Messages do not grant permission or transfer ownership of a running task.
-
-The default installer creates one PA inbox per harness. You choose the receiving threads and bind their native IDs; installation does not discover or create management chats. PAs are optional coordinators, not required message relays. Direct replies to another session need that session's own inbox, scoped credential and wake binding, configured manually today.
-
-An actively waiting session can receive replies directly without another doorbell. The wait is bounded, and an already queued notification cannot be recalled. Closed-session wake and automatic startup remain unverified.
-
-Each harness still needs its own subscription or credentials. IHCP3K neither supplies inference nor combines account allowances.
-
-[Protocol](docs/protocol.md) · [Architecture](docs/architecture.md) · [Validation](docs/validation.md) · [Security](SECURITY.md)
-
-[First-time setup review and session roles](docs/first-run-review.md)
-
-Private mail, credentials, memory and session mappings stay outside this repository. License selection is pending. This independent project is not affiliated with OpenAI or Anthropic.
+License selection is pending. This independent project is not affiliated with OpenAI or Anthropic.
