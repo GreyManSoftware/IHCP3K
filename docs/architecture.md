@@ -1,6 +1,8 @@
 # Architecture
 
-**v0.5 experimental prerelease; see the validation report for tested behavior.** Native adapter behavior remains subject to installed-version validation. The default runtime is local MCP stdio using an existing Node runtime. Compatible runtime connections share one private SQLite database. The database is the coordination authority; process identity is not chat identity.
+IHCP3K connects sessions in different agent applications, called **harnesses**. Each uses **MCP (Model Context Protocol)** tools through a local IHCP3K process, or **runtime**. **Stdio** means that messages travel through that process's standard input/output, rather than a network server. SQLite stores requests and results in one private database. See [terminology](terminology.md) for the concurrency and lifecycle terms below.
+
+**v1.0.0; see the validation report for tested behavior.** Native adapter behavior remains subject to installed-version validation. The default runtime is local MCP stdio using an existing Node runtime. Compatible runtime connections share one private SQLite database. The database is the coordination authority; process identity is not chat identity.
 
 ```mermaid
 flowchart LR
@@ -21,7 +23,7 @@ flowchart LR
   R2 <--> DB
   R1 --> N
   N <--> DB
-  N -. "native doorbell" .-> B
+  N -. "native message notification" .-> B
   R1 --> W
   W --> Child
   Child -->|result| W
@@ -35,7 +37,7 @@ The drawing shows logical components, not a guaranteed process count. Each stdio
 
 The shared schema stores mail, scoped directory entries, hashed credentials, request/reply links, attendance leases, native notification reservations and worker results. WAL transactions serialize mutations. Claim generations/tokens, endpoint revisions and notification reservations fence stale operations. A short database lease coordinates general maintenance across runtime processes; worker cleanup reserves eligible rows transactionally.
 
-Compatible v0.5 processes may share the database. A writer-version fence rejects incompatible writes. The older Docker/HTTP store uses an exclusive owner lock; it must not run against the shared local authority. Installer reuse checks identity, schema and copied-bundle integrity. Installation does not authorize an upgrade or live migration.
+Compatible v1.0.0 processes may share the database. A writer-version fence rejects incompatible writes. The older Docker/HTTP store uses an exclusive owner lock; it must not run against the shared local authority. Installer reuse checks identity, schema and copied-bundle integrity. Installation does not authorize an upgrade or live migration.
 
 A committed message survives process shutdown. Expired claims and uncertain notification/worker outcomes require reconciliation; they do not silently replay. Opening another stdio connection must not invalidate a valid claim held elsewhere. A completed message clears its body but retains duplicate protection.
 
@@ -43,13 +45,13 @@ A committed message survives process shutdown. Expired claims and uncertain noti
 
 `mail.request` commits a request with the caller's explicit return endpoint, derived from its credential, and a stable request ID. `mail.reply` uses the request's fenced claim to commit one correlated reply and complete the request atomically. Claimed replies carry `in_reply_to`; `mail.request_status` reports message and reply state. A completed request record alone is not proof of a successful task: inspect the reply and actual outcome.
 
-Receivers either check their inbox or register bounded attendance before waiting. Attendance is persisted with a deadline so other runtime processes suppress new doorbells for that inbox. It does not renew itself, and starting another connection does not drop it. Already queued notifications cannot be recalled. The legacy `exchange` helper still uses ordinary mail and can receive unrelated messages.
+Receivers either check their inbox or register bounded attendance before waiting. Attendance is persisted with a deadline so other runtime processes suppress new message notifications for that inbox. It does not renew itself, and starting another connection does not drop it. Already queued notifications cannot be recalled. The legacy `exchange` helper still uses ordinary mail and can receive unrelated messages.
 
 ## Native notifications
 
-`runtime.notifications` maps exact endpoints to trusted native configurations with `endpoint_revision`. An active runtime checks pending mail, reserves a durable notification and invokes the configured adapter. These checks do not call a model. The Claude notification adapter itself may use a bounded model worker; Codex uses its native queue directly. No PA relay is required.
+`runtime.notifications` maps exact endpoints to trusted native configurations with `endpoint_revision`. An active runtime checks pending mail, reserves a durable notification and invokes the configured adapter. These checks do not call a model. The Claude notification adapter itself may use a bounded model worker; Codex uses its native queue directly. No central relay is required.
 
-In stdio, `mail.send`, `mail.request` and `mail.reply` commit first, then await the configured bounded notification before returning (`timeout_ms` capped at 30000, with bounded shutdown). The response includes `native_notification` dispatch status, never proof of target receipt. A one-shot CLI therefore attempts its configured nudge before closing. Mail stays durable if notification fails; retry only with the original idempotency key. The active-runtime timer remains for pending recovery. Notifications are disabled until explicitly configured.
+In stdio, `mail.send`, `mail.request` and `mail.reply` commit first, then await the configured bounded notification before returning (`timeout_ms` capped at 30000, with bounded shutdown). The response includes `native_notification` dispatch status, never proof of target receipt. A one-shot CLI therefore attempts its configured notification before closing. Mail stays durable if notification fails; retry only with the original idempotency key. The active-runtime timer remains for pending recovery. Notifications are disabled until explicitly configured.
 
 - Codex queue acknowledgement establishes queuing only. Warnings and ambiguous output are uncertain.
 - Claude Code `ListAgents`/`SendMessage` requires version-specific validation of the combined no-persist notification path and an unambiguous stable target. Its worker success does not prove target receipt.
@@ -67,7 +69,7 @@ SQLite owns job identity and bounded results; the launching runtime owns the chi
 
 Maintenance runs while a runtime is active. When every runtime is closed, there is no notification delivery or timed cleanup; later runtime activity can resume eligible maintenance. No daemon or OS scheduler is installed implicitly.
 
-Completed mail bodies are cleared; older outcome/audit detail is compacted and dedup identities remain. Pending and uncertain work is retained. Native history cleanup is separate: only configured persisted Codex workers support archive/delete in this candidate, after durable result acknowledgement and verified exit. Failed and uncertain jobs are not automatic cleanup candidates. Worker result records and backups have their own retention; native cleanup does not erase them.
+Completed mail bodies are cleared; older outcome/audit detail is compacted and dedup identities remain. Pending and uncertain work is retained. Native history cleanup is separate: only configured persisted Codex workers support archive/delete in this version, after durable result acknowledgement and verified exit. Failed and uncertain jobs are not automatic cleanup candidates. Worker result records and backups have their own retention; native cleanup does not erase them.
 
 No-persist, process exit, archive and delete are different outcomes. Immediate-child exit is not proof of descendant or remote-job exit. Neither logical deletion nor native cleanup promises zero residue or remote erasure.
 
@@ -75,4 +77,4 @@ No-persist, process exit, archive and delete are different outcomes. Immediate-c
 
 The [Docker/HTTP deployment](http-v04.md) retains the existing v0.4 capabilities with an exclusive database owner and explicit wake bridges. It does not gain stdio-only request/worker tools automatically. It is an alternative authority, never a parallel live copy of the same mail.
 
-Canonical skills, agent definitions and project memory remain in user-chosen files outside protocol state. Native adapters reference those sources. IHCP3K does not sync them, replicate sessions, schedule shared CPU/GPU resources or route ordinary prompts. See [onboarding](onboarding.md), [native adapters](native-adapters.md) and [protocol](protocol.md).
+Shared skills, agent definitions and project memory remain in user-chosen files outside protocol state. Native adapters reference those sources. IHCP3K does not sync them, replicate sessions, schedule shared CPU/GPU resources or route ordinary prompts. See [onboarding](onboarding.md), [native adapters](native-adapters.md) and [protocol](protocol.md).

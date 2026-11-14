@@ -4,6 +4,7 @@ import path from 'node:path';
 import {randomBytes,createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
+import {parseInvocation} from './usage.mjs';
 import {connect,call,exchange} from '../service/dist/client.mjs';
 const read=f=>JSON.parse(fs.readFileSync(f,'utf8').replace(/^\uFEFF/,''));
 const write=(f,v)=>fs.writeFileSync(f,JSON.stringify(v,null,2)+'\n',{mode:0o600});
@@ -36,7 +37,10 @@ export async function runWorker(client,{timeout_ms=330000,...request},{invoke=ca
  return result;
 }
 export async function main(args=process.argv.slice(2)){
- const [mode,location,input,output,extra]=args;
+ const parsed=parseInvocation(args);
+ if(parsed.help)return parsed;
+ const mode=parsed.mode==='unregister'?'unlink':parsed.mode;
+ const [location,input,output,extra]=parsed.args;
  if(mode==='inspect'){
    return withClient(operatorLocation(location),path.join(path.dirname(location),'tokens','admin.tok'),c=>call(c,'directory.inspect',read(input)));
  }
@@ -79,9 +83,9 @@ export async function main(args=process.argv.slice(2)){
    if(mode==='status')return input?call(c,'mail.request_status',read(input)):call(c,'mail.status',{recipient:session.endpoint});
    if(mode==='worker')return runWorker(c,read(input),{stdio:!!session.runtime_file});
    if(mode==='worker-status'||mode==='worker-ack')return call(c,mode==='worker-status'?'worker.status':'worker.ack',read(input));
-   // Explicit JSON arguments only; chat means durable request, not activation,
+   // Explicit JSON arguments only; remote_prompt means a stored request, not activation,
    // native wake setup, prompt inference, or an automatically selected worker.
-   if(mode==='request'||mode==='chat')return call(c,'mail.request',read(input));
+   if(mode==='remote_prompt')return call(c,'mail.request',read(input));
    if(mode==='reply')return call(c,'mail.reply',read(input));
    if(mode==='send'||mode==='exchange'){
      const message=read(input);
@@ -99,4 +103,4 @@ export async function main(args=process.argv.slice(2)){
    throw Error('UNKNOWN_MODE');
  });
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)main().then(result=>console.log(JSON.stringify(result))).catch(e=>{console.error(e.message);process.exitCode=1;});
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)main().then(result=>console.log(result.help?result.text:JSON.stringify(result))).catch(e=>{console.error(e.message);process.exitCode=1;});

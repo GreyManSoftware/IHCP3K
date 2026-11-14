@@ -1,12 +1,14 @@
 # Migration and offline restore
 
-## v0.5 local installation from an offline backup
+Use this guide to move stored data or restore a backup. The **source** is the old installation; the **destination** is the new private folder. **Reconciliation** means inspecting incomplete requests and checking whether they already caused changes before retrying them. A **cutover** is the later, explicit switch of clients to the destination. See [terminology](terminology.md) for backup and message-state terms.
+
+## v1.0.0 local installation from an offline backup
 
 This is an explicit offline operation, separate from normal installation and live cutover. A restore does not itself switch a live installation. Respect actual native execution restrictions throughout the migration. Do not start an older HTTP owner alongside new stdio writers or let two databases accept normal traffic as the same authority.
 
 1. Agree a single migration owner and barrier; stop every source writer/consumer, including old HTTP and any stdio connections. Record the source version and consistent backup identity privately.
 2. Obtain a verified SQLite snapshot/backup including committed WAL data and its SHA-256. Copying only a running `.db` file is not a consistent backup. Preserve the source and evidence unchanged.
-3. Ask for a new private destination and the working folder used by throwaway nudges. Restore with the explicit backup arguments:
+3. Ask for a new private destination and the working folder used by temporary notification processes. Restore with the explicit backup arguments:
 
 ```sh
 node scripts/install-local.mjs /absolute/private/new-ihcp /absolute/private/offline-backup.db <sha256> --workdir /absolute/chosen/working-folder

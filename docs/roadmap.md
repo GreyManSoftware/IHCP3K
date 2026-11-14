@@ -1,14 +1,16 @@
 # Release scope
 
-## v0.5 experimental prerelease
+This page separates implemented features from future work. A **harness** is an app that runs an agent; an **adapter** connects that app's own commands to IHCP3K. See [terminology](terminology.md) for implementation terms.
 
-The experimental prerelease has passed local tests and a bounded two-harness rehearsal; native setup and migration still require installed-version verification. See [validation](validation.md) for reported checks and remaining evidence gaps.
+## Version 1.0.0
 
-The candidate adds local MCP stdio on an existing Node runtime, a shared SQLite schema, idempotent private installation, explicit correlated requests/replies, trusted native notifications and bounded worker jobs/results. It retains the directory and scoped credentials. The optional Docker/HTTP deployment remains v0.4 compatibility mode, without the new stdio request/worker APIs.
+The implementation was tested during the earlier development releases, including a bounded two-harness rehearsal; native setup and migration still require installed-version verification. See [validation](validation.md) for reported checks and remaining evidence gaps.
+
+Version 1.0.0 provides local MCP stdio on an existing Node runtime, a shared SQLite schema, idempotent private installation, explicit correlated requests/replies, trusted native notifications and bounded worker jobs/results. It retains the directory and scoped credentials. The optional Docker/HTTP deployment remains v0.4 compatibility mode, without the new stdio request/worker APIs.
 
 First installation asks for private state and records the user-chosen working folder, versions, model evidence, privileges, native bindings and retention. Native configuration is prepared for explicit setup. Offline backup restore to a new directory is distinct from live cutover and does not switch callers or unpause mail.
 
-Ordinary prompts stay local. A PA is optional. Codex notifications are deterministic; Claude notification workers require a validated no-persist messaging combination. Copilot workers are explicitly experimental; the documented existing-session AHP route is not yet a validated live integration. No automatic model routing or paid fallback is introduced.
+Ordinary prompts stay local. Codex notifications are deterministic; Claude notification workers require a validated no-persist messaging combination. Copilot workers are explicitly experimental; the documented existing-session AHP route is not yet a validated live integration. No automatic model routing or paid fallback is introduced.
 
 ## Remaining gates
 
@@ -20,4 +22,4 @@ Ordinary prompts stay local. A PA is optional. Codex notifications are determini
 
 ## Later work
 
-Automatic native model inventory, deterministic dispatch policy, service-backed resource scheduling, session/handover records, canonical-knowledge adapters, automated backup retention and stronger hostile-client isolation remain separate work. IHCP3K does not pool allowances, sync memory or transfer session ownership today.
+Automatic native model inventory, deterministic dispatch policy, service-backed resource scheduling, session/handover records, adapters for shared skills and memory, automated backup retention and stronger hostile-client isolation remain separate work. IHCP3K does not pool allowances, sync memory or transfer session ownership today.

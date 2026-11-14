@@ -137,7 +137,7 @@ test('bundled local install, strict reuse and explicit stdio CLI workflow',async
   await t.test('connect uses official SDK tools and rejects ambiguous/nonlocal transports',async()=>{
     const client=await connect({runtimeFile,tokenFile});
     try {
-      assert.equal(client.getServerVersion().version,'0.5.0');
+      assert.equal(client.getServerVersion().version,'1.0.0');
       assert.ok((await client.listTools()).tools.some(tool=>tool.name==='directory.enroll'));
       assert.equal((await call(client,'mail.status',{recipient:'bootstrap'})).recipient,'bootstrap');
     }finally{await client.close();}
@@ -162,8 +162,8 @@ test('bundled local install, strict reuse and explicit stdio CLI workflow',async
       sessions[endpoint]=session;
     }
     const request=json('request',{recipient:'bob',body:'explicit synthetic request',idempotency_key:'test-request'});
-    const sent=await cli(['chat',sessions.alice,request]);
-    assert.equal((await cli(['request',sessions.alice,request])).id,sent.id);
+    const sent=await cli(['remote_prompt',sessions.alice,request]);
+    for(const alias of ['prompt','chat','request']) assert.equal((await cli([alias,sessions.alice,request])).id,sent.id);
     const claim=(await cli(['check',sessions.bob])).messages[0];assert.equal(claim.id,sent.id);
     const reply=json('reply',{id:claim.id,claim_token:claim.claim_token,generation:claim.generation,body:'explicit synthetic reply',idempotency_key:'test-reply',outcome:'answered'});
     await cli(['reply',sessions.bob,reply]);
@@ -172,5 +172,9 @@ test('bundled local install, strict reuse and explicit stdio CLI workflow',async
     await cli(['complete',sessions.alice,json('complete',{id:received.id,claim_token:received.claim_token,generation:received.generation,outcome:'received'})]);
     assert.equal((await cli(['status',sessions.alice])).recipient,'alice');
     await assert.rejects(cli(['worker',sessions.alice,json('worker',{adapter:'not-configured',prompt:'explicit synthetic task',idempotency_key:'worker'})]),/WORKER_NOT_CONFIGURED/);
+    assert.equal((await cli(['unregister',sessions.bob])).active,false);
+    assert.equal((await cli(['unlink',sessions.bob])).linked,false);
+    await assert.rejects(cli(['discover',sessions.bob]),/SESSION_UNLINKED/);
+    assert.equal((await cli(['status',sessions.alice])).recipient,'alice');
   });
 });

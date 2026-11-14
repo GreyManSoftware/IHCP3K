@@ -1,8 +1,10 @@
 # Optional Docker/HTTP deployment — v0.4 compatibility
 
-This is the **versioned compatibility path**, not the v0.5 default. It retains the existing mail, attendance, directory, backup/restore and explicit wake-bridge capabilities. The current HTTP entrypoint uses the older exclusive-owner store; new correlated request and worker APIs belong to local stdio. A shared version string does not make their capabilities identical.
+This legacy option runs a local HTTP server in Docker instead of using the default process connection. A **waiter** waits for new mail without reading its contents; a **notification bridge** passes that signal to the receiving app. **Loopback** means connections stay on this computer (`127.0.0.1`). See [terminology](terminology.md) for the older protocol vocabulary.
 
-For the default candidate installation, read [onboarding](onboarding.md). Never run HTTP and stdio against the same live database or accept normal traffic into two authorities for the same installation. Respect current native execution restrictions and record actual failures; do not infer a universal restriction from an earlier deployment batch.
+This is the **versioned compatibility path**, not the v1.0.0 default. It retains the existing mail, attendance, directory, backup/restore and explicit wake-bridge capabilities. The current HTTP entrypoint uses the older exclusive-owner store; new correlated request and worker APIs belong to local stdio. A shared version string does not make their capabilities identical.
+
+For the default installation, read [onboarding](onboarding.md). Never run HTTP and stdio against the same live database or accept normal traffic into two authorities for the same installation. Respect the installed app’s execution restrictions and report actual failures.
 
 ## Install and roles
 
@@ -13,11 +15,11 @@ node scripts/dev.mjs prepare
 node scripts/install.mjs /absolute/private/ihcp-http 43188 ihcp3k-example
 ```
 
-This installer builds the container image, records its immutable image ID and provisions an exclusive SQLite owner in a named volume. Matching repeated installation verifies/reuses it. It is not the v0.5 shared local installer. Do not use public synthetic credentials for real mail.
+This installer builds the container image, records its immutable image ID and provisions an exclusive SQLite owner in a named volume. Matching repeated installation verifies/reuses it. It is not the v1.0.0 shared local installer. Do not use public synthetic credentials for real mail.
 
 The older `scripts/init-runtime.mjs <new-private-directory> alpha beta` creates static sender/receiver/waiter roles. It is an optional legacy initializer, not the directory enrolment workflow. Dynamic `ihcp.mjs enroll` uses the HTTP runtime manifest; `register` takes `http://127.0.0.1:43188/mcp` instead of a stdio runtime path.
 
-Receiving credentials claim only their own inbox; sender credentials cannot claim; wake credentials see availability without bodies. A PA can be a receiving session but is not required. The service runs non-root on loopback, with a read-only container filesystem and bounded resources. Stopping keeps its data volumes. No boot-time installer is implied.
+Receiving credentials claim only their own inbox; sender credentials cannot claim; wake credentials see availability without bodies. The service runs non-root on loopback, with a read-only container filesystem and bounded resources. Stopping keeps its data volumes. No boot-time installer is implied.
 
 ## Native HTTP clients
 
@@ -55,7 +57,7 @@ It waits, reserves one notification, queues without `--resume`, and records queu
 
 Claude's background waiter is owned by the intended receiving session, exits on pending mail and must be rearmed after handling. Its task completion is a native notification only if that harness surfaces it correctly. See [Claude HTTP setup](claude-setup.md).
 
-The legacy `exchange` helper wraps attendance, ordinary send, bounded wait and release. It returns possibly unrelated claims. v0.5 request correlation is not available through this compatibility store.
+The legacy `exchange` helper wraps attendance, ordinary send, bounded wait and release. It returns possibly unrelated claims. v1.0.0 request correlation is not available through this compatibility store.
 
 ## Operations and historical rehearsal
 
@@ -67,4 +69,4 @@ node scripts/ops.mjs /absolute/private/ihcp-http/runtime.json restore before-upg
 
 Backup uses the SQLite backup API and records integrity/hash evidence. Restore creates a separate paused database; it does not replace the running one. Preserve newer state and reconcile effects before choosing a sole authority. The ops commands are HTTP/container operations, not commands for the local stdio manifest. Backup retention is manual.
 
-The historical rehearsal uses `scripts/onboarding-smoke.mjs` with an explicitly rehearsal-named HTTP runtime. It does not validate new stdio behavior or native app wake. Historical evidence is labeled separately in [validation](validation.md); see [migration](migration.md) before an offline transition.
+The historical rehearsal uses `scripts/onboarding-smoke.mjs` with an explicitly rehearsal-named HTTP runtime. It does not validate new stdio behavior or notification delivery in the app. Historical evidence is labeled separately in [validation](validation.md); see [migration](migration.md) before an offline transition.

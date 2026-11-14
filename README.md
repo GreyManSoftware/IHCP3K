@@ -1,48 +1,85 @@
-# IHCP3K
+# Inter-Harness Communication Protocol 3000
 
-**Inter-Harness Communication Protocol 3000** lets AI sessions exchange durable requests and results across harnesses. Sessions can talk directly; a PA is optional.
+**Your AI assistants, working together.**
 
-**v0.5 experimental prerelease.** Local installation and a Claude–Codex round trip have been tested. Native harness coverage remains limited. See [validation](docs/validation.md).
+Have subscriptions to Claude, Codex and GitHub Copilot? It's frustrating to hit the limit in one while another sits unused. Or to want another model's opinion without copying your conversation into a different app.
 
-The default is local MCP over stdio, using an existing compatible Node runtime and one shared SQLite database in a private folder you choose. Docker builds the bundles; it is not required to run an already-built local installation. The optional Docker/HTTP deployment retains the existing v0.4 capabilities.
+IHCP3K lets connected coding assistants exchange requests and results. Stay in your preferred **harness**—the app running your agent—and bring in another when you need it.
+
+## Make better use of your subscriptions
+
+Spread work across the subscriptions you already pay for. Keep planning a feature in Claude while a connected Codex session investigates a failing test:
+
+> Use IHCP3K to ask the connected Codex session to investigate this failing test. Send it the failure output and relevant code, and bring the findings back here. Don't change files yet.
+
+Approaching your allowance limit? Prepare a handover before it runs out:
+
+> Prepare a handover for Codex with the goal, decisions, changed files, test results and next steps. Stop work here and ask it to confirm it can continue.
+
+Each subscription keeps its own limits. IHCP3K shares requests and results; it doesn't pool allowances, clone chat history or automatically merge memories.
+
+## Use models outside your current app
+
+Ask a connected assistant for a fresh review, an alternative design or a focused investigation, then use its answer in your current conversation.
+
+> Show me the models advertised by my connected harnesses and when that information was checked. Suggest one for reviewing this database migration, and let me choose before sending it.
+
+You choose when to delegate. Ordinary prompts stay local; IHCP3K doesn't silently switch models or buy API credits.
+
+![Illustrative conversation: Claude requests a Codex review and receives the findings.](docs/images/review-example.svg)
+
+*Mock conversation, not a product screenshot. Actual wording and tool displays vary by harness.*
+
+## Get started
+
+Give your assistant this prompt:
+
+> Set up IHCP3K using https://github.com/GreyManSoftware/IHCP3K/blob/main/AGENT_SETUP.md. Ask me where to store its private working data, then help me connect my coding assistants and test a request and reply.
+
+The prebuilt release needs an existing Node 24.15+ installation. Docker isn't needed to run it.
+
+## Everyday usage
+
+After setup, use the `harness-interop` skill:
+
+| Mode | Purpose | Example |
+| --- | --- | --- |
+| `/register` | Connect a session. | `/register this session` |
+| `/discover` | List connected sessions or models. | `/discover models` |
+| `/remote_prompt` | Send a request to another session. | `/remote_prompt codex-review Review this diff` |
+| `/status` | Check a request's progress. | `/status <request-id>` |
+| `/unregister` | Disconnect a harness or session. | `/unregister harness Codex` |
+
+Use a destination returned by `/discover`; `codex-review` is just an example. Unregistering a harness removes its verified registrations and IHCP3K connection settings, preserving other harnesses and shared data.
+
+**Need help?** Use any mode on its own or add `--help`. The skill explains the arguments and shows examples before acting. `/remote_prompt` can also list available destinations. `/prompt` and `/chat` remain aliases.
+
+These are skill instructions, **not universal native slash commands or typing-box autocomplete**. If your app intercepts `/` commands, use:
+
+```text
+Use harness-interop: /remote_prompt --help
+Use harness-interop: /discover sessions
+Use harness-interop: /remote_prompt codex-review Review the current diff
+```
+
+See [all modes and terminal usage](docs/usage.md) for more.
+
+## How it connects
+
+Either session can send a request. The answer returns to the original conversation:
 
 ```mermaid
 flowchart LR
-  A["Native session A"] <-->|"MCP stdio"| R1["Local runtime connection"]
-  B["Native session B"] <-->|"MCP stdio"| R2["Local runtime connection"]
-  R1 <--> DB[("Shared private SQLite<br/>mail, directory, worker results")]
-  R2 <--> DB
-  R1 --> N["Configured native notification adapter"]
-  N -. "doorbell to exact target" .-> B
-  R1 --> W["Explicit bounded worker<br/>owned by launching runtime"]
-  W -->|result| R1
+  C["Claude session"] -->|"Please review this code"| I["IHCP3K"]
+  I -->|"Review request"| X["Codex session"]
+  X -->|"Review findings"| I
+  I -->|"Here's the review"| C
 ```
 
-Runtime connections are not assumed to map one-to-one to chats. Each endpoint needs an explicit credential and native binding. A doorbell signals pending mail; it does not prove the recipient read or completed it.
+Messages are stored locally. Configured notifications alert the receiving session; if every runtime is closed, messages wait until one starts again.
 
-## What v0.5 adds
+**Version 1.0.0.** A Claude–Codex round trip has been tested. Copilot support remains experimental and hasn't been tested against an installed host. Other harnesses need compatibility checks; see [validation](docs/validation.md).
 
-- Correlated requests and replies with explicit return endpoints and status.
-- Multiple stdio connections sharing durable mail, claims and directory state.
-- Configured native notifications: deterministic Codex queue; version-validated Claude Code messaging.
-- Bounded workers with durable results and an explicit history/cleanup choice. Copilot workers and the documentation-based AHP notification adapter are experimental and untested against an installed host.
+[Download](https://github.com/GreyManSoftware/IHCP3K/releases) · [Agent setup](AGENT_SETUP.md) · [Architecture](docs/architecture.md) · [Technical terms](docs/terminology.md)
 
-Plain prompts stay in the current session. IHCP3K does not silently route work, change models, pool subscription allowances or authorize paid fallback. Shared skills and project memory remain in user-chosen canonical locations.
-
-## Set it up
-
-Give your assistant [AGENT_SETUP.md](AGENT_SETUP.md) and the [harness-interop skill](skills/harness-interop/SKILL.md). **First install must ask where to put private runtime state before writing it.** Setup also records native bindings, model evidence, permissions and worker retention. Native configuration is prepared for explicit setup, never silently installed.
-
-For a fresh install, use the prebuilt ZIP on [the v0.5.1 release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v0.5.1) and the agent guide above. It needs existing Node 24.15+, but no Docker at runtime.
-
-For a source checkout without prebuilt bundles, Docker builds them:
-
-```sh
-node scripts/dev.mjs prepare
-```
-
-Then follow [onboarding](docs/onboarding.md). Do not install a host runtime to satisfy a missing prerequisite. App-closed delivery and exact-time cleanup are not guaranteed; maintenance runs while a runtime is active.
-
-[Architecture](docs/architecture.md) · [Protocol](docs/protocol.md) · [Native adapters](docs/native-adapters.md) · [Validation](docs/validation.md) · [Security](SECURITY.md)
-
-License selection is pending. This independent project is not affiliated with the harness vendors.
+Independent project; not affiliated with the harness vendors. License selection is pending.

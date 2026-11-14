@@ -1,5 +1,7 @@
 # Connect a native harness
 
+“Native” here means the agent app's own tools, settings and permission prompts. **MCP (Model Context Protocol)** supplies the IHCP3K tools; **stdio** is the local process connection. An **endpoint** is the session's registered messaging identity. “Scope” describes which sessions inherit a configuration or credential. See [terminology](terminology.md) for supporting terms.
+
 Install and register an endpoint using [onboarding](onboarding.md) first. Keep its receiving credential scoped to the intended session. A global MCP entry with a fixed token gives every session that loads it the same identity; passing that token as an argument or environment variable does not create session isolation.
 
 Use a per-invocation configuration for a bounded CLI test. For a persistent desktop connection, verify the app's actual configuration scope and reload behavior before installing it. If it cannot isolate receiving identities, do not advertise a global connection as per-session registration. Explicit scoped SDK access is a separate supported client, not evidence that native MCP tools work.
@@ -8,7 +10,7 @@ Use a per-invocation configuration for a bounded CLI test. For a persistent desk
 
 Write a private MCP JSON file containing the scoped launch contract from [agent setup](../AGENT_SETUP.md). For a disposable native load test, use the installed CLI's `--mcp-config <file> --strict-mcp-config` options, an explicitly selected available model, `--no-session-persistence`, and a narrowly selected `--allowedTools` list. Ask it to discover the directory and inspect its own mailbox, then finish.
 
-The observed CLI also supports `claude mcp add -s local <name> -- <command> <args...>` for project-local setup and `-s user` for user-wide setup. Those are persistent changes and require an explicit scope decision. A project scope can still contain multiple sessions. Do not assume an existing desktop chat hot-loads a newly added server.
+The observed CLI also supports `claude mcp add -s local <name> -- <command> <args...>` for project-local setup and `-s user` for user-wide setup. Those are persistent changes and require an explicit scope decision. A project scope can still contain multiple sessions. Do not assume an existing desktop chat load without restartings a newly added server.
 
 The v0.5 rehearsal passed native directory discovery and mailbox inspection through an invocation-scoped stdio configuration. It does not prove the separate notification adapter's restricted messaging flags or desktop reload behavior.
 

@@ -1,14 +1,16 @@
 # Install, register and discover
 
-**v0.5 experimental prerelease; see the validation report for native coverage.** The shared [harness-interop skill](../skills/harness-interop/SKILL.md) uses the commands below. Mode names are not universally installed slash commands. Respect current native execution restrictions and record actual failures; do not infer a universal restriction from an earlier deployment batch.
+This is the command-line setup guide; for conversational setup, start with [the README](../README.md#get-started). A **runtime** is the local IHCP3K process and its private files. An **endpoint** is a registered session address. **Enrolment** grants one session permission to register and names the other sessions it may contact. **MCP (Model Context Protocol)** is the tool interface; **stdio** connects through a local process's input/output. See [terminology](terminology.md) for the other terms used below.
+
+**v1.0.0; see the validation report for native coverage.** The shared [harness-interop skill](../skills/harness-interop/SKILL.md) uses the commands below. Mode names are not universally installed slash commands. Respect the installed app’s execution restrictions and report actual failures.
 
 ## Choose the folder first
 
-On first install, **ask the user to choose a private runtime folder before writing state**. On relink, show and reuse the recorded choice unless migration is requested. Record harness/engine versions, native host/server and stable session binding, model/access evidence, privileges, canonical knowledge locations and worker cleanup choice. See [AGENT_SETUP.md](../AGENT_SETUP.md).
+On first install, **ask the user to choose a private runtime folder before writing state**. On relink, show and reuse the recorded choice unless migration is requested. Record harness/engine versions, native host/server and stable session binding, model/access evidence, privileges, shared skill and project-memory locations and worker cleanup choice. See [AGENT_SETUP.md](../AGENT_SETUP.md).
 
 Every path below is a placeholder. Replace it with the chosen absolute path; keep the parent directory existing and private outputs out of public commits. An installer does not infer user consent from an example path.
 
-The chosen working folder is separate from private runtime state. `--workdir` records `runtime.working_directory`; without it, the private folder is used. Reuse the same option on subsequent installs when the folders differ. Throwaway nudges run in that working folder; targets and explicit task workers retain their own registered/configured cwd.
+The chosen working folder is separate from private runtime state. `--workdir` records `runtime.working_directory`; without it, the private folder is used. Reuse the same option on subsequent installs when the folders differ. Temporary notification processes run in that working folder; targets and explicit task workers retain their own registered/configured cwd.
 
 ## Install local stdio
 
@@ -82,9 +84,9 @@ Emit the scoped native snippet described in [AGENT_SETUP.md](../AGENT_SETUP.md) 
 
 Use the [harness-specific setup checks](native-setup.md) for scope and first-use approval. A fixed receiving token in global configuration is shared by every session loading that configuration.
 
-Configure trusted `runtime.notifications` separately, keyed by endpoint with `endpoint_revision`, using the [adapter contract](native-adapters.md). The private directory binding/profile is evidence, not executable configuration. A runtime checks configured mail without AI polling; an appropriate native adapter handles the doorbell. A short CLI call does not leave a notifier running after it exits. A persistent native MCP connection or another explicitly owned active runtime is needed for ongoing delivery.
+Configure trusted `runtime.notifications` separately, keyed by endpoint with `endpoint_revision`, using the [adapter contract](native-adapters.md). The private directory binding/profile is evidence, not executable configuration. A runtime checks configured mail without AI polling; an appropriate native adapter handles the message notification. A short CLI call does not leave a notifier running after it exits. A persistent native MCP connection or another explicitly owned active runtime is needed for ongoing delivery.
 
-In stdio, `mail.send`, `mail.request` and `mail.reply` commit first, then await the configured bounded notification before returning (`timeout_ms` capped at 30000, with bounded shutdown). The response includes `native_notification` dispatch status, never proof of target receipt. A one-shot CLI therefore attempts its configured nudge before closing. Mail stays durable if notification fails; retry only with the original idempotency key. The active-runtime timer remains for pending recovery. Notifications are disabled until explicitly configured.
+In stdio, `mail.send`, `mail.request` and `mail.reply` commit first, then await the configured bounded notification before returning (`timeout_ms` capped at 30000, with bounded shutdown). The response includes `native_notification` dispatch status, never proof of target receipt. A one-shot CLI therefore attempts its configured notification before closing. Mail stays durable if notification fails; retry only with the original idempotency key. The active-runtime timer remains for pending recovery. Notifications are disabled until explicitly configured.
 
 ## Send a request and receive its reply
 
@@ -95,11 +97,11 @@ Create a private request file:
 ```
 
 ```sh
-node scripts/ihcp.mjs chat /absolute/private/alpha-session /absolute/private/request.json
+node scripts/ihcp.mjs remote_prompt /absolute/private/alpha-session /absolute/private/request.json
 node scripts/ihcp.mjs check /absolute/private/beta-session
 ```
 
-`chat` and `request` both call `mail.request`. They return the durable message/request ID and derived `reply_to`, not a completed answer. They do not route a plain prompt, select a model or start a worker. The receiver's claimed request includes its claim token/generation and return correlation.
+`remote_prompt` and `request` both call `mail.request`. They return the durable message/request ID and derived `reply_to`, not a completed answer. They do not route a plain prompt, select a model or start a worker. The receiver's claimed request includes its claim token/generation and return correlation.
 
 After completing authorized work, create a private reply file with `id`, `claim_token`, `generation`, `body`, a stable `idempotency_key` and optional truthful `outcome`:
 
@@ -112,7 +114,7 @@ node scripts/ihcp.mjs complete /absolute/private/alpha-session /absolute/private
 
 `request-id.json` contains `{"id":"<returned request UUID>"}`. With no input file, `status` reports the endpoint's inbox status. `reply` atomically enqueues the correlated response and completes the original request. Claimed responses carry `in_reply_to`; inspect the real sender/result and complete their claim separately. Completion uses `id`, `claim_token`, `generation`, `outcome`.
 
-`send` remains ordinary asynchronous mail. The legacy `exchange` helper attends the inbox and uses `mail.send`; it can return unrelated mail and does not add v0.5 correlation. For correlated active waiting, use `mail.attend` → `mail.request` → bounded `mail.wait` → `mail.unattend`, then match `in_reply_to`. Never assume the first claimed message is the answer.
+`send` remains ordinary asynchronous mail. The legacy `exchange` helper attends the inbox and uses `mail.send`; it can return unrelated mail and does not add v1.0.0 correlation. For correlated active waiting, use `mail.attend` → `mail.request` → bounded `mail.wait` → `mail.unattend`, then match `in_reply_to`. Never assume the first claimed message is the answer.
 
 ## Run a configured worker
 
@@ -134,7 +136,7 @@ Closing a stdio connection aborts workers owned by that runtime. A wait timeout/
 
 ## Refresh, unlink and relink
 
-`refresh` takes a profile-only JSON snapshot and uses the locally recorded expected revision. Older observations are rejected; passed reset times do not invent new allowance. Refresh increments the endpoint revision: review/update the trusted notification binding before expecting further doorbells.
+`refresh` takes a profile-only JSON snapshot and uses the locally recorded expected revision. Older observations are rejected; passed reset times do not invent new allowance. Refresh increments the endpoint revision: review/update the trusted notification binding before expecting further message notifications.
 
 ```sh
 node scripts/ihcp.mjs unlink /absolute/private/alpha-session
@@ -144,4 +146,4 @@ Unlink revokes both credentials, hides the endpoint and quarantines interrupted 
 
 Relink needs a fresh enrolment at the current revision and a new private session directory. Rebind and validate native delivery before explicitly switching configuration. Operator `inspect <runtime.json> <endpoint.json>` can reconcile a lost unlink/registration response. Restore also requires relink and review; it must not resurrect revoked credentials.
 
-Use isolated synthetic endpoints for rehearsal. The historical `onboarding-smoke.mjs` exercises Docker/HTTP; it is not evidence of v0.5 stdio or native behavior. Candidate results remain pending in [validation](validation.md).
+Use isolated synthetic endpoints for rehearsal. The historical `onboarding-smoke.mjs` exercises Docker/HTTP; it is not evidence of v1.0.0 stdio or native behavior. See [validation](validation.md) for measured coverage and remaining gaps.

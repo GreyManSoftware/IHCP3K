@@ -59,7 +59,7 @@ function equal(a,b) { const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length
 function reject(res,code,error) { res.writeHead(code,{'Content-Type':'application/json'});res.end(JSON.stringify({error})); }
 
 export function createToolServer(store,directory,principal,abort=new AbortController(),resolvePrincipal=()=>principal){
-    const server=new McpServer({name:'ihcp3k',version:'0.5.0'});
+    const server=new McpServer({name:'ihcp3k',version:'1.0.0'});
     for (const [name,inputSchema] of Object.entries(schemas)) {
       if(name.startsWith('worker.')&&!store.workers)continue;
       if(!name.startsWith('worker.')&&!directoryMethods[name]&&!store[methods[name]])continue;
