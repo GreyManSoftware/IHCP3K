@@ -1,5 +1,12 @@
 # Validation
 
+## 1.2.4 managed updates
+
+The full pinned-container suite passed **150 tests** (87 service, 16 legacy waiter, 26 CLI/help/resolver/listener/update, 13 legacy import, 8 installer). Windows updater/help checks passed separately after adding ACL preservation; all eight Windows packaged installer checks also passed. Targeted follow-up checks cover the final archive-path and CLI-help changes.
+
+Updater fixtures exercise read-only checks, compatible activation, preservation of database bytes/credentials/settings, semantic versions, checksums and safe archive paths, local-edit refusal, active-worker/concurrent-update refusal, rollback at staging/activation/health failure, recovery of an interrupted transaction, and bounded native reload outcomes. The installed package was compared with the published release before attempting a real update. These checks do not equate a fresh SDK connection or a reload acknowledgement with every open chat refreshing its native tools. App restarts require user approval.
+
+
 ## 1.2.3 quiet delivery
 
 The full pinned-container suite passed **135 tests** (87 service, 16 legacy waiter, 11 CLI/help/resolver/listener, 13 legacy import, 8 installer). Extended SDK and registry tests cover real tool-result replies, source isolation, attendance before send, bounded waits, listener renewal without claiming, pending grace, expiry fallback, pause/cancellation/revocation, invalid-request cleanup and the short native notification. The listener wrapper tests exercise internal renewal and cleanup without model calls. All eight packaged installer tests also passed on Windows, and the skill validator passed.

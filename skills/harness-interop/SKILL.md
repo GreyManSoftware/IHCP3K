@@ -1,11 +1,11 @@
 ---
 name: harness-interop
-description: Set up, register, unregister or inspect IHCP3K; discover connected harnesses and models; handle IHCP3K notifications; or send authorized cross-harness requests through remote_prompt or plain language. For ordinary chats within the current harness, use its native discovery and messaging tools instead. Explicit IHCP3K requests may use this skill within one harness.
+description: Set up, update, register, unregister or inspect IHCP3K; discover connected harnesses and models; handle IHCP3K notifications; or send authorized cross-harness requests through remote_prompt or plain language. For ordinary chats within the current harness, use its native discovery and messaging tools instead. Explicit IHCP3K requests may use this skill within one harness.
 ---
 
 # Harness interop
 
-Use IHCP3K **1.2.3**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
+Use IHCP3K **1.2.4**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
 
 ## Choose the communication route
 
@@ -15,11 +15,21 @@ A session name alone does not imply a remote harness. Resolve it using native lo
 
 ## Usage assistance
 
-Recognize `Use harness-interop: /register Codex`, `/discover sessions`, `/remote_prompt <harness> <request>`, `/status <request-id>` and `/unregister Codex`. These are instructions interpreted by the skill, not universally installed slash commands or native autocomplete. `prompt`, `chat` and `request` alias `remote_prompt`; `unlink` aliases unregister for a harness folder.
+Recognize `Use harness-interop: /register Codex`, `/discover sessions`, `/remote_prompt <harness> <request>`, `/status <request-id>`, `/update` and `/unregister Codex`. These are instructions interpreted by the skill, not universally installed slash commands or native autocomplete. `prompt`, `chat` and `request` alias `remote_prompt`; `unlink` aliases unregister for a harness folder; `upgrade` aliases update.
 
-For **every mode**, a bare invocation, `--help`, `-h`, `?` or incomplete arguments must produce help before mutation: purpose, syntax, one example, scope and missing details. Help does not register, send, claim, change settings, acknowledge or disconnect anything. Explicit help remains help even with complete arguments. Unknown switches get valid alternatives rather than guessed actions. Install/relink workflows follow the same rule.
+Conversational `/update` and `/update --check` are complete requests once the existing installation is resolved. For **every mode that needs arguments**, a bare invocation, `--help`, `-h`, `?` or incomplete arguments must produce help before mutation: purpose, syntax, one example, scope and missing details. Help does not register, send, claim, change settings, acknowledge or disconnect anything. Explicit help remains help even with complete arguments. Unknown switches get valid alternatives rather than guessed actions. Install/relink workflows follow the same rule.
 
 Remote-prompt help can call read-only native discovery through `harness.discover` to show actual permitted destinations and observation age. If no harness is configured, explain registration. Never invent a destination, model entitlement or credential.
+
+## Update the existing installation
+
+“Update IHCP3K” or `/update` authorizes the complete update workflow, including the installed skill and the registered harnesses' owned MCP entries. The agent performs it; never hand the user download commands, file-copy instructions or a cleanup script. `/update --check` is read-only. `/update --help` explains behavior without mutation. For conversational `/update`, resolve the current installation from its MCP launch arguments or harness record; do not ask its location again. If multiple genuinely different installations remain ambiguous, clarify that target only.
+
+Read [updating](../../docs/updating.md). Execute `node <app>/scripts/ihcp.mjs update <harness-dir>` (append `--check` only for a check). It verifies the stable release and installed files, stages the package, preserves credentials/database/registrations, updates managed skill copies and MCP launch markers, checks a fresh MCP connection and attempts Codex's supported reload. It never kills active harnesses, installs host tools, unregisters, rotates tokens or changes permissions. If this is an older install with no updater, bootstrap the verified release helper as documented; do that work yourself, not through user instructions.
+
+Inspect every returned connection result. `reload_requested` is not proof of native tool loading: use the current native MCP tools to verify the connection. Claude SDK hosts should use their supported reconnect API when exposed; interactive Claude has `/mcp reconnect ihcp3k`. Do not assume a shell can inject that command into an unrelated live session. Use a supported native integration tool when available. For an unavailable reconnect, `restart_approval_required`, or persistent closed transport, keep the safely installed update and ask through the question tool before restarting the affected app. State which app and why. Do not restart it silently or claim full completion from a fresh bundled-client health check. After the approved reconnect/restart, verify native tool loading and report one concise result. Respect any actual approval denial.
+
+If the updater refuses local edits, an occupied update lock, active workers, unsupported schema/layout or native configuration, inspect that exact condition; preserve data and user changes. Do not bypass integrity checks or repeatedly retry an uncertain mutation. Re-running a completed update rechecks health/connections without copying files or re-registering. Interrupted owned transactions recover on the next update attempt. Update reports and backups are private; do not show credentials or verbose receipts.
 
 ## Register the harness once
 
@@ -31,7 +41,7 @@ Record installed versions, account/host scope, model and usage evidence/date, na
 
 Successful scans automatically add stable session addresses and disable missing ones. Failed/partial scans preserve the old inventory with stale/error flags and do not authorize new sending. Successful snapshots cache for 15 seconds; `/refresh` forces a new native listing. There is no model-based polling or hidden permanent discovery service.
 
-During setup, inspect the chosen installation before downloading. Compare its version with the latest published stable GitHub release; reuse verified local files or a verified cached ZIP when current or newer. Download only for a newer stable release or missing/damaged files. Do not downgrade or overwrite a running installation, private data or local modifications. If offline, reuse verified compatible files and report that update availability is unknown. Follow the current agent setup checklist over conflicting instructions in an older package.
+During setup, inspect the chosen installation before downloading. Compare its version with the latest published stable GitHub release; reuse verified local files or a verified cached ZIP when current or newer. Download only for a newer stable release or missing/damaged files. Do not downgrade or manually overwrite a running installation, private data or local modifications; use the managed update workflow for an existing runtime. If offline, reuse verified compatible files and report that update availability is unknown. Follow the current agent setup checklist over conflicting instructions in an older package.
 
 Normal setup checks configuration, native tool loading, existing-session discovery and one harmless request/reply with automatic notification when a peer is available. Reuse completed checks. Never unregister, rotate credentials, disconnect peers, create disposable chats or ask the user to run lifecycle tests during installation. Those are isolated release tests, not fresh-install requirements. Report a required native reload briefly and leave working connections intact.
 

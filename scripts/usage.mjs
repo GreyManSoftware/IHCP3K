@@ -1,5 +1,6 @@
 // CLI help is available before opening any runtime or credential file.
 export const commands = {
+  update: ['<harness-dir> [--check]', 'Update the shared installation, skills and MCP connections; ask before any app restart. --check changes nothing.'],
   enroll: ['<runtime.json> <grant.json> <new-code-file>', 'Create a one-use registration grant; administrator operation.'],
   register: ['<runtime.json> <harness-config.json> <harness-dir>', 'Register a harness once; discover its native sessions automatically.'],
   'register-session': ['<runtime.json|url> <code-file> <profile.json> <new-session-dir>', 'Legacy session enrolment; not needed by harness registration.'],
@@ -24,7 +25,7 @@ export const commands = {
   listen: ['<harness-dir> <listener.json>', 'Target-owned native background task: wait without claiming, then exit on pending mail.'],
   unattend: ['<harness-dir> <attendance.json>', 'Release this session\'s listener lease using its returned token.']
 };
-export const aliases = {prompt:'remote_prompt',chat:'remote_prompt',request:'remote_prompt',unlink:'unregister'};
+export const aliases = {prompt:'remote_prompt',chat:'remote_prompt',request:'remote_prompt',unlink:'unregister',upgrade:'update'};
 const minimumArgs = {enroll:3,register:3,'register-session':4,remote_prompt:2,resolve:2,reply:2,send:2,complete:2,renew:2,release:2,inspect:2,worker:2,'worker-status':2,'worker-ack':2,exchange:2,wait:2,listen:2,unattend:2};
 export function parseInvocation(args) {
   const raw=args[0]?.replace(/^\//,'');
@@ -38,12 +39,14 @@ export function parseInvocation(args) {
     const lines=['IHCP3K command usage','',...entries.flatMap(([key,[syntax,description]])=>[
       `node scripts/ihcp.mjs ${key} ${syntax}`,`  ${description}`]),'',
       'Add --help to any command. Paths are placeholders; use your configured private paths.',
-      'Aliases: prompt/chat/request → remote_prompt; unlink → unregister.',
+      'Aliases: prompt/chat/request → remote_prompt; unlink → unregister; upgrade → update.',
       'Mail/worker JSON includes session_id: the source native ID from discovery, not a separate registration.',
       'CLI unregister revokes the harness. The skill also removes its recorded native MCP configuration.'];
     return {help:true,mode:mode??null,text:lines.join('\n')};
   }
-  const unknown=rest.find(a=>a.startsWith('-'));
+  const unknown=rest.find(a=>a.startsWith('-')&&!(mode==='update'&&a==='--check'));
   if(unknown)throw Error(`UNKNOWN_OPTION: ${unknown}. Supported help options: --help, -h, ?.`);
-  return {help:false,mode,args:rest};
+  if(mode==='update'&&!rest.filter(a=>a!=='--check').length)return parseInvocation(['update','--help']);
+  if(mode==='update'&&rest.filter(a=>a!=='--check').length!==1)throw Error('UPDATE_REQUIRES_HARNESS_DIRECTORY');
+  return {help:false,mode,args:mode==='update'?rest.filter(a=>a!=='--check'):rest,...(mode==='update'?{check:rest.includes('--check')}:{})};
 }

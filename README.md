@@ -56,11 +56,12 @@ Register each harness once. Registration connects it reciprocally with the other
 | `/discover` | List connected sessions or models. | `/discover models` |
 | `/remote_prompt` | Send a request to another session. | `/remote_prompt Claude Ask the review agent to do ABC` |
 | `/status` | Check a request's progress. | `/status <request-id>` |
+| `/update` | Update the runtime, shared skill and MCP connections. | `/update` |
 | `/unregister` | Disconnect a harness. | `/unregister Codex` |
 
 Name the harness you want to use; `Claude` names the harness; the skill resolves a suitable session using the request and project context. Unregistering a harness revokes its credential and all discovered session addresses; the skill also removes its IHCP3K connection settings. Other harnesses and shared data remain.
 
-**Need help?** Use any mode on its own or add `--help`. The skill explains the arguments and shows examples before acting. `/remote_prompt` can also list available destinations. `/prompt` and `/chat` remain aliases.
+**Need help?** Add `--help` to any mode. Commands needing arguments also explain themselves when used on their own; `/update` is already a complete request. The skill explains the arguments and shows examples before acting. `/remote_prompt` can also list available destinations. `/prompt` and `/chat` remain aliases.
 
 These are skill instructions, **not universal native slash commands or typing-box autocomplete**. If your app intercepts `/` commands, use:
 
@@ -80,6 +81,12 @@ Replace `<Session>` with the chat's name, for example: “Ask Codex if the backe
 
 The primary form is `/remote_prompt <harness> <request>`. If the app intercepts slash commands, prefix it with `Use harness-interop:`. The agent handles internal session addresses. See [all modes and terminal usage](docs/usage.md) for more.
 
+## Updates
+
+Say **“Update IHCP3K”** or `Use harness-interop: /update`. Your assistant checks the latest release, verifies it, preserves your data and registrations, updates the skill and refreshes MCP connections. You do not need to download, move files or run scripts yourself. Use `/update --check` to check without changing anything.
+
+If an app needs restarting, the assistant asks first. An installed update is not reported as fully connected until the native connection is checked. See [update details](docs/updating.md).
+
 ## How it connects
 
 Either session can send a request. The answer returns to the original conversation:
@@ -97,7 +104,7 @@ MCP (Model Context Protocol) exposes IHCP3K tools to each assistant. SQLite stor
 
 For an unloaded Claude Desktop chat, IHCP3K can ask an already-live desktop session to wake the existing target, then deliver the request directly. It creates no replacement chat. At least one Claude Desktop session must be reachable; the CLI alone cannot start an unloaded target.
 
-**Version 1.2.3.** Automatic notifications and a request/reply round trip have been tested between installed Claude and Codex sessions. Setup includes notifications as standard. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md), including connection-reload and closed-app limits.
+**Version 1.2.4.** Automatic notifications and a request/reply round trip have been tested between installed Claude and Codex sessions. Setup includes notifications as standard. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md), including connection-reload and closed-app limits.
 
 [Download](https://github.com/GreyManSoftware/IHCP3K/releases) · [Agent setup](AGENT_SETUP.md) · [Architecture](docs/architecture.md) · [Technical terms](docs/terminology.md)
 

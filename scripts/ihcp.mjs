@@ -7,6 +7,7 @@ import {pathToFileURL} from 'node:url';
 import {parseInvocation} from './usage.mjs';
 import {resolveTarget} from './resolve-target.mjs';
 import {listenInbox} from './listen-inbox.mjs';
+import {update} from './update.mjs';
 import {connect,call,exchange} from '../service/dist/client.mjs';
 const read=f=>JSON.parse(fs.readFileSync(f,'utf8').replace(/^\uFEFF/,''));
 const write=(f,v)=>fs.writeFileSync(f,JSON.stringify(v,null,2)+'\n',{mode:0o600});
@@ -43,6 +44,7 @@ export async function main(args=process.argv.slice(2)){
  if(parsed.help)return parsed;
  const mode=parsed.mode==='unregister'?'unlink':parsed.mode;
  const [location,input,output,extra]=parsed.args;
+ if(mode==='update')return update(location,{check:parsed.check});
  if(mode==='inspect'){
    return withClient(operatorLocation(location),path.join(path.dirname(location),'tokens','admin.tok'),c=>call(c,'directory.inspect',read(input)));
  }

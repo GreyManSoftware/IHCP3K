@@ -137,7 +137,7 @@ test('bundled local install, strict reuse and explicit stdio CLI workflow',async
   await t.test('connect uses official SDK tools and rejects ambiguous/nonlocal transports',async()=>{
     const client=await connect({runtimeFile,tokenFile});
     try {
-      assert.equal(client.getServerVersion().version,'1.2.3');
+      assert.equal(client.getServerVersion().version,'1.2.4');
       assert.ok((await client.listTools()).tools.some(tool=>tool.name==='directory.enroll'));
       assert.equal((await call(client,'mail.status',{recipient:'bootstrap'})).recipient,'bootstrap');
     }finally{await client.close();}

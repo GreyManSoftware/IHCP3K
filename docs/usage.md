@@ -62,6 +62,7 @@ The skill also supports the lower-level modes below. Each must offer usage assis
 | `resolve` | Resolve a named target or request a Claude Desktop wake through one existing desktop session. |
 | `remote_prompt` | Send a request to a named harness; the skill resolves the destination session. |
 | `status` | Inspect a request ID, or inbox counts with `status inbox` (the skill supplies the current source ID). |
+| `update` | Update the shared runtime, skill and MCP connections; `--check` changes nothing. The conversational form needs no path. |
 | `unregister` | Disconnect an explicitly named harness and all its session addresses. |
 | `refresh` | Force native session discovery again. |
 | `check` | Claim waiting messages for handling; this is not a read-only status check. |
