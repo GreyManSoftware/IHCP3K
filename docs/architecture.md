@@ -2,7 +2,7 @@
 
 IHCP3K connects sessions in different agent applications, called **harnesses**. Each harness registers once and supplies a read-only native session-discovery adapter. Sessions receive stable internal addresses automatically, without individual enrolment. Each uses **MCP (Model Context Protocol)** tools through a local IHCP3K process, or **runtime**. **Stdio** means that messages travel through that process's standard input/output, rather than a network server. SQLite stores requests and results in one private database. See [terminology](terminology.md) for the concurrency and lifecycle terms below.
 
-**v1.2.5; see the validation report for tested behavior.** Native adapter behavior remains subject to installed-version validation. The default runtime is local MCP stdio using an existing Node runtime. Compatible runtime connections share one private SQLite database. The database is the coordination authority; process identity is not chat identity.
+**v1.2.6; see the validation report for tested behavior.** Native adapter behavior remains subject to installed-version validation. The default runtime is local MCP stdio using an existing Node runtime. Compatible runtime connections share one private SQLite database. The database is the coordination authority; process identity is not chat identity.
 
 ```mermaid
 flowchart LR
@@ -37,7 +37,7 @@ The drawing shows logical components, not a guaranteed process count. Each stdio
 
 Schema 6 adds harness registrations, hashed harness credentials, discovered session metadata and cross-process scan leases. The shared schema also stores mail, scoped directory entries, hashed credentials, request/reply links, attendance leases, native notification reservations and worker results. WAL transactions serialize mutations. Claim generations/tokens, endpoint revisions and notification reservations fence stale operations. A short database lease coordinates general maintenance across runtime processes; worker cleanup reserves eligible rows transactionally.
 
-Compatible v1.2.5 processes may share the database. A writer-version fence rejects incompatible writes. The older Docker/HTTP store uses an exclusive owner lock; it must not run against the shared local authority. Installer reuse checks identity, schema and copied-bundle integrity. Installation does not authorize an upgrade or live migration.
+Compatible v1.2.6 processes may share the database. A writer-version fence rejects incompatible writes. The older Docker/HTTP store uses an exclusive owner lock; it must not run against the shared local authority. Installer reuse checks identity, schema and copied-bundle integrity. Installation does not authorize an upgrade or live migration.
 
 A committed message survives process shutdown. Expired claims and uncertain notification/worker outcomes require reconciliation; they do not silently replay. Opening another stdio connection must not invalidate a valid claim held elsewhere. A completed message clears its body but retains duplicate protection.
 
@@ -49,7 +49,7 @@ Receivers either check their inbox or register bounded attendance before waiting
 
 ## Native notifications
 
-Named-target resolution is a client workflow in `scripts/resolve-target.mjs`, using existing MCP discovery and correlated requests. For an unloaded Claude Desktop target it asks one verified, already-live desktop session to perform native lookup/wake, then refreshes discovery before sending the actual task. The temporary CLI helper only notifies the relay. No new persistent chat is created; at least one desktop-hosted session must be reachable. See [native adapters](native-adapters.md#unloaded-claude-desktop-targets).
+Named-target resolution runs in `scripts/resolve-target.mjs` with `desktop-open.mjs`. It can open an exact existing local desktop chat through the registered CLI in a host PTY, checking current non-archived metadata before launch and native identity afterward. One existing desktop session can alternatively relay native lookup/wake. A durable per-request attempt record prevents uncertain opens being repeated. The temporary CLI notification helper still only sends notifications; it does not expose desktop APIs. No replacement chat or permanent relay is created. See [native adapters](native-adapters.md#unloaded-claude-desktop-targets).
 
 A harness may register one trusted notification template; discovered native IDs supply its targets. Legacy `runtime.notifications` entries remain available for explicitly configured endpoints. Each dispatch checks the current endpoint revision. An active runtime checks pending mail, reserves a durable notification and invokes the configured adapter. These checks do not call a model. The Claude notification adapter itself may use a bounded model worker; Codex uses its native queue directly. No central relay is required.
 

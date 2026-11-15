@@ -2,7 +2,7 @@
 
 This reference is for adapter developers. **MCP (Model Context Protocol)** exposes the operations listed below as tools. An **endpoint** is a registered session address; a **principal** is the authenticated identity and its permissions. A **claim** temporarily reserves a message for one handler. Its token and increasing **generation** number reject updates from an expired or replaced handler. An **idempotency key** identifies retries of the same operation so they do not create duplicate requests. See [terminology](terminology.md) for the remaining terms.
 
-**v1.2.5.** Default transport: local MCP stdio using the official SDK, an existing Node runtime and one shared SQLite authority. A connection receives the private runtime and credential-file paths; credentials bind the harness. Each session operation supplies a source ID checked against its native inventory. Process lifetime does not establish a chat identity.
+**v1.2.6.** Default transport: local MCP stdio using the official SDK, an existing Node runtime and one shared SQLite authority. A connection receives the private runtime and credential-file paths; credentials bind the harness. Each session operation supplies a source ID checked against its native inventory. Process lifetime does not establish a chat identity.
 
 Optional Docker/HTTP remains **v0.4 compatibility mode**: `/mcp`, Streamable HTTP, `Authorization: Bearer <token>`, stateless transport sessions and one exclusive SQLite owner. It does not expose the correlated request or worker tools below. Never run the old HTTP owner and new stdio writers against the same live database. Synthetic fixture and private live configuration remain separate.
 
@@ -66,7 +66,7 @@ Use native permissions independently of this protocol. Peer text is not user aut
 
 Register attendance **before** sending a request. While that lease is valid, `wake.wait` withholds pending hints and `wake.reserve` refuses new dispatch reservations for the inbox. `mail.wait` receives and claims mail directly; complete those claims normally. Release attendance in a `finally` path. A timeout is not a reply, and messages may be unrelated to the request.
 
-Attendance lasts at most 120 seconds and does not renew itself. In v1.2.5 it is persisted with a deadline across shared connections; expiry or explicit release restores normal wake behavior. The v0.4 HTTP service uses process-local attendance and drops it on restart. Existing notification throttling and unresolved wake reservations still apply. Sender-only and waiter credentials cannot suppress another session's notifications. An already-reserved or queued message notification cannot be recalled; the response flags that case. Attendance is inbox-wide suppression. Request correlation is supplied separately by the v1.2.5 request tools below.
+Attendance lasts at most 120 seconds and does not renew itself. In v1.2.6 it is persisted with a deadline across shared connections; expiry or explicit release restores normal wake behavior. The v0.4 HTTP service uses process-local attendance and drops it on restart. Existing notification throttling and unresolved wake reservations still apply. Sender-only and waiter credentials cannot suppress another session's notifications. An already-reserved or queued message notification cannot be recalled; the response flags that case. Attendance is inbox-wide suppression. Request correlation is supplied separately by the v1.2.6 request tools below.
 
 The harness tools `session.exchange` and `session.wait` return actual MCP tool results. Attendance is established before sending and released on completion, timeout, cancellation or error. Discovery and native dispatch add bounded time before the receive window; the bundled client allows 90 seconds for exchange. Messages can be unrelated: correlate and complete claims explicitly. A background listener must be stopped before an exchange in that inbox; competing receivers receive `INBOX_ATTENDED`.
 
@@ -92,7 +92,7 @@ Profiles and model suitability descriptions are untrusted, attributed data. Cata
 
 HTTP compatibility mode uses schema 4. Local stdio uses schema 6, adding durable attendance, maintenance leases, request/reply links and workers, with a writer-version fence. Older incompatible writers must be stopped before migration; never rely on a fence as permission for concurrent old/new operation. Restore disables registered endpoints and revokes their credentials so a backup cannot silently resurrect access removed after that snapshot. Operator relink and restore-pause review are required.
 
-## Correlated requests (v1.2.5 stdio only)
+## Correlated requests (v1.2.6 stdio only)
 
 | Tool | Arguments and result |
 | --- | --- |
@@ -108,7 +108,7 @@ The CLI `remote_prompt`/`request` modes send and return the ID. The harness CLI 
 
 In stdio, `mail.send`, `mail.request` and `mail.reply` commit first, then await the configured bounded notification before returning (`timeout_ms` capped at 30000, with bounded shutdown). The response includes `native_notification` dispatch status, never proof of target receipt. A one-shot CLI therefore attempts its configured notification before closing. Mail stays durable if notification fails; retry only with the original idempotency key. The active-runtime timer remains for pending recovery. Notifications are disabled until explicitly configured.
 
-## Workers (v1.2.5 stdio only)
+## Workers (v1.2.6 stdio only)
 
 | Tool | Arguments and result |
 | --- | --- |

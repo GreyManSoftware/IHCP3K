@@ -5,7 +5,7 @@ description: Set up, update, register, unregister or inspect IHCP3K; discover co
 
 # Harness interop
 
-Use IHCP3K **1.2.5**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
+Use IHCP3K **1.2.6**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
 
 ## Choose the communication route
 
@@ -87,9 +87,11 @@ For idle Codex, the inspected queue interface has no supported hidden-message op
 
 ### A named Claude chat is not in discovery
 
-An unloaded Claude Desktop chat is not necessarily missing. CLI discovery and `ListAgents`/`SendMessage` expose reachable processes. For an authorized cross-harness request, use `node <app>/scripts/ihcp.mjs resolve <harness-dir> <private-target.json>` before declaring a named target unavailable. Input: `{session_id,harness,name,cwd?,idempotency_key}`. Include the known project folder. The resolver returns `found` with the endpoint, or requests a native wake through one verified, already-live Claude Desktop session. No special PA chat or new persistent relay is required. Never fan out.
+An unloaded Claude Desktop chat is not necessarily missing. For an authorized cross-harness request, run `node <app>/scripts/ihcp.mjs resolve <harness-dir> <private-target.json>` with the host's PTY option (Codex `exec_command` uses `tty:true`). Input: `{session_id,harness,name,cwd?,desktop_id?,idempotency_key}`. Include the known project folder. The helper automatically opens an exact existing, non-archived local desktop chat when necessary and verifies its native identity. It can bootstrap one existing desktop chat when all are suspended. Do not ask the user to open the target manually when this route is available. See [native adapters](../../docs/native-adapters.md#unloaded-claude-desktop-targets).
 
-For `wake_requested`, retain `request_id` and handle its correlated reply automatically. Re-run resolution with that ID as `wake_request_id` and, when the reply supplies it, `desktop_id`. Fresh discovery must identify the intended chat before sending its actual work once with the original idempotency key. Never recreate an uncertain wake under another key or relay. Report `not_found`, `ambiguous`, `unavailable` or `uncertain` truthfully; do not silently resume/copy a chat. If no live desktop relay exists, report that exact limitation. This route does not start a closed desktop app.
+For `desktop_open_requires_tty`, rerun the same helper with a host PTY; no open has occurred yet. Do not create replacement chats, use `--bg --resume`, change native permissions, inject UI messages, or edit desktop metadata. Missing PTY support, unknown metadata layouts, ambiguous identities and `desktop_open_uncertain` are genuine limitations, not reasons to guess or loop. Keep the same idempotency key; uncertainty never authorizes another launch.
+
+`found` returns the verified destination. Send the original request exactly once with its stable idempotency key and await the correlated reply. For `wake_requested`, retain `request_id`, handle its correlated native-desktop relay reply, then rerun resolution with `wake_request_id` and the returned `desktop_id`. Do not ask the user to poll or resend. A temporary CLI notifier is not a desktop session-management API; do not claim its successful exit alone woke a suspended chat.
 
 On receiving `ihcp.desktop-wake.v1` in a request body, handle only the authorized target lookup/wake. A Claude Desktop session uses its native `ccd_session_mgmt` list/get/send tools to verify a unique non-archived chat by exact name and known project, or the supplied `local_` desktop ID. Send one harmless wake notice to that existing chat, then return the desktop identity and actual native delivery result in the correlated reply. Do not perform project work, create a replacement, rotate credentials or bypass a native denial. If desktop tools are unavailable, return `unavailable`; do not forward to another relay. The target's native process UUID may change after wake; its desktop ID is a separate identity, not an IHCP3K mail address.
 

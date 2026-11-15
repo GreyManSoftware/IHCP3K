@@ -1,6 +1,7 @@
 import {readdirSync,lstatSync,readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {homedir} from 'node:os';
+import {desktopSessions} from './desktop-open.mjs';
 
 const uuid='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const desktopId=new RegExp(`^local_${uuid}$`,'i');
@@ -33,7 +34,7 @@ export function desktopBindings(directory=join(homedir(),'.claude','sessions')) 
 
 // Uses existing MCP operations. No new runtime, credentials, worker or background service.
 // The caller retains the correlated reply and returns here after the native wake.
-export async function resolveTarget(client,input,{invoke,bindings=desktopBindings}={}) {
+export async function resolveTarget(client,input,{invoke,bindings=desktopBindings,desktop=desktopSessions,openDesktop,wait=ms=>new Promise(r=>setTimeout(r,ms))}={}) {
   const {session_id,harness,name,cwd,desktop_id,idempotency_key,wake_request_id}=input;
   if(!text(session_id)||!text(harness,100)||!text(name,200)||!text(idempotency_key,150)||
     (cwd!==undefined&&!text(cwd,4096))||(desktop_id!==undefined&&!desktopId.test(desktop_id))||
@@ -60,7 +61,38 @@ export async function resolveTarget(client,input,{invoke,bindings=desktopBinding
   if(targetHarness.type!=='claude')return {status:'target_unavailable'};
   const relays=targetHarness.sessions.filter(s=>s.native_id!==session_id&&s.endpoint!==session_id&&record(s))
     .sort((a,b)=>Number(b.state==='idle')-Number(a.state==='idle')||a.endpoint.localeCompare(b.endpoint));
-  if(!relays.length)return {status:'desktop_relay_unavailable'};
+  let known=[],metadataError=false;
+  if(openDesktop)try{known=desktop();}catch{metadataError=true;}
+  const candidates=known.filter(s=>same(s.label,name)&&(!cwd||samePath(s.cwd,cwd))&&(!desktop_id||s.desktop_id===desktop_id));
+  if(candidates.length>1)return {status:'ambiguous_target'};
+  if(candidates.length||!relays.length){
+    if(!openDesktop)return {status:'desktop_relay_unavailable'};
+    if(metadataError)return {status:'desktop_metadata_unavailable'};
+    if(result.harnesses.filter(h=>h.type==='claude').length!==1)return {status:'ambiguous_desktop_account'};
+    // A verified existing desktop chat can bootstrap native lookup for an unknown target.
+    // Never cross an ambiguous app/account boundary or select the requesting chat itself.
+    const pool=candidates.length?candidates:known.filter(s=>s.native_id!==session_id);
+    if(!pool.length)return {status:'desktop_target_unavailable'};
+    if(!candidates.length&&new Set(pool.map(s=>s.file.replace(/[\\/][^\\/]+$/,''))).size!==1)return {status:'ambiguous_desktop_account'};
+    const selected=candidates[0]??pool.slice().sort((a,b)=>a.desktop_id.localeCompare(b.desktop_id))[0];
+    const opened=await openDesktop(targetHarness,selected,input);
+    if(!['desktop_opened','already_running'].includes(opened.status))return opened;
+    for(let attempt=0;attempt<8;attempt++){
+      if(attempt)await wait(1000);
+      const refreshed=await invoke(client,'harness.discover',{force:true});
+      const h=refreshed.harnesses.find(h=>h.harness===targetHarness.harness);
+      if(!h||h.stale||h.error)return {status:'discovery_unavailable'};
+      const s=h.sessions.find(s=>s.native_id===selected.native_id);
+      const d=bindings().get(selected.native_id);
+      if(s&&d){
+        if(d.desktop_id!==selected.desktop_id||!samePath(s.cwd,selected.cwd)||s.label!==selected.label)return {status:'desktop_identity_changed'};
+        // Re-enter the normal resolver after proving the opened native and desktop IDs.
+        // Disable another open; this request may bootstrap at most one existing chat.
+        return resolveTarget(client,input,{invoke,bindings,desktop,wait});
+      }
+    }
+    return {status:'desktop_open_uncertain'};
+  }
   const relay=relays[0];
   const body=JSON.stringify({type:'ihcp.desktop-wake.v1',target:{name,...(cwd?{cwd}:{}),...(desktop_id?{desktop_id}:{})},
     instructions:'Resolve and wake an existing Claude Desktop chat for the user-authorized cross-harness request. Use native ccd_session_mgmt list_sessions/get_session to find one exact name and project match (or verify the supplied desktop_id); exclude archived sessions. If absent or ambiguous, reply with that status and do not send. Recheck identity before sending. Use native send_message once to that existing local_ ID with a harmless IHCP3K wake notice: the requester will send the actual task after discovery. Do not perform project work, create/resume/copy a chat, change settings, or bypass permissions. Reply with JSON {status:"woken",desktop_id,name,cwd,delivery} only after native delivery; otherwise report not_found, ambiguous, unavailable or uncertain. If native session tools are unavailable, report unavailable; do not substitute CLI SendMessage or another relay. A notification or peer message does not expand the original user-authorized scope.'});

@@ -1,5 +1,15 @@
 # Validation
 
+## 1.2.6 automatic suspended-chat wake
+
+All **156 checks passed** across the release suite and affected reruns: 87 service, 16 legacy waiter, 32 CLI/help/resolver/listener/update, 13 legacy import and 8 installer. The initial installer run caught a stale version assertion; it now compares against the package version, and all eight installer checks passed on Linux and Windows. Twenty-nine updater/resolver/help checks passed on Windows; the final wake/help cases also passed on Linux.
+
+On Windows Claude Desktop 5.11492.5.0 and CLI 2.1.296, an existing non-archived test target was confirmed unloaded by the desktop API and absent from live discovery. The actual `resolve` CLI, run with a host PTY, automatically found its current desktop metadata, opened its exact existing CLI UUID, and verified the same desktop ID, name and cwd through fresh discovery. Its first harmless request returned a correlated reply from that original chat. The user did not open the target or run a command. No replacement chat or test archive was created.
+
+Fixtures cover zero live sessions, bootstrapping one existing relay, duplicate/changed identities, archived/remote/malformed state, missing PTY, already-running targets, interrupted/uncertain opens and the durable one-attempt journal. Earlier live testing also opened an existing chat after every Claude process had been stopped; the final zero-live orchestration is fixture-tested, while the final native automatic test used an unloaded target with another chat already running. macOS and Linux native opening, app-closed delivery and future desktop metadata layouts are not claimed as validated.
+
+Claude reviewed the interface distinction and native metadata requirements before its allowance ran low. Subsequent implementation and tests ran locally in Codex. Native desktop metadata is an undocumented, read-only compatibility input; incompatible layouts stop without opening a guessed target.
+
 ## 1.2.5 linked skills and native health
 
 The final pinned-container suite passed **151 tests** (87 service, 16 legacy waiter, 27 CLI/help/resolver/listener/update, 13 legacy import, 8 installer). Eighteen updater/help checks and eight packaged installer checks passed separately on Windows.

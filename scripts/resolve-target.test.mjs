@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {resolveTarget,desktopBindings} from './resolve-target.mjs';
+import {desktopSessions,readDesktopSession,desktopOpener} from './desktop-open.mjs';
+import {DatabaseSync} from 'node:sqlite';
 const A='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',B='bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
 const req={session_id:A,harness:'Claude',name:'Game',cwd:'E:/Projects/Game',idempotency_key:'wake-game'};
 const relay={native_id:B,endpoint:'relay',label:'Any desktop chat',cwd:'E:/Projects/Other',state:'idle'};
@@ -70,4 +72,66 @@ test('desktop metadata requires one unambiguous native desktop registration, not
   writeFileSync(join(dir,'13.json'),JSON.stringify({...d,pid:13,sessionId:B,entrypoint:'cli'}));assert.equal(desktopBindings(dir).size,1);
   writeFileSync(join(dir,'12.json'),JSON.stringify({...d,pid:99}));assert.equal(desktopBindings(dir).size,0);
   mkdirSync(join(dir,'14.json'));assert.equal(desktopBindings(dir).size,0);
+});
+
+test('all-suspended resolution opens one existing desktop identity and verifies discovery before sending',async()=>{
+ const f=fixture([]),saved={native_id:B,desktop_id:`local_${B}`,label:'Game',cwd:req.cwd,file:'/native/account/chat.json'};
+ let opens=0;
+ const options={...f.options,desktop:()=>[saved],wait:async()=>{},openDesktop:async()=>{
+  opens++;f.h.sessions.push({...target,native_id:B});f.records.set(B,{desktop_id:saved.desktop_id,name:'Game',cwd:req.cwd});return {status:'desktop_opened'};
+ }};
+ assert.equal((await resolveTarget(null,req,options)).status,'found');assert.equal(opens,1);
+ assert.equal(f.calls.some(c=>c.name==='session.request'),false);
+});
+
+test('desktop fallback rejects ambiguous, changed, unsupported and uncertain identities without replay',async()=>{
+ const saved={native_id:B,desktop_id:`local_${B}`,label:'Game',cwd:req.cwd,file:'/native/account/chat.json'};
+ for(const status of ['desktop_open_requires_tty','desktop_open_uncertain','desktop_identity_changed','desktop_launcher_unavailable']){
+  const f=fixture([]);let opens=0;
+  assert.equal((await resolveTarget(null,req,{...f.options,desktop:()=>[saved],openDesktop:async()=>{opens++;return {status};}})).status,status);assert.equal(opens,1);
+ }
+ const f=fixture([]),base={...f.options,desktop:()=>[saved,{...saved,file:'/other/chat.json'}],openDesktop:async()=>assert.fail('ambiguous open')};
+ assert.equal((await resolveTarget(null,req,base)).status,'ambiguous_target');
+ const g=fixture([]);let n=0;
+ assert.equal((await resolveTarget(null,req,{...g.options,desktop:()=>[saved],wait:async()=>{},openDesktop:async()=>{n++;return {status:'desktop_opened'};}})).status,'desktop_open_uncertain');assert.equal(n,1);
+ const h=fixture([]);
+ assert.equal((await resolveTarget(null,req,{...h.options,desktop:()=>[saved],openDesktop:async()=>{h.h.sessions.push({...target,native_id:B});h.records.set(B,{desktop_id:`local_${A}`,name:'Game',cwd:req.cwd});return {status:'desktop_opened'};}})).status,'desktop_identity_changed');
+});
+
+test('desktop bootstrap opens one relay when target is not in metadata; never chains bootstraps',async()=>{
+ const f=fixture([]),saved={native_id:B,desktop_id:`local_${B}`,label:relay.label,cwd:relay.cwd,file:'/native/account/relay.json'};let n=0;
+ const result=await resolveTarget(null,req,{...f.options,desktop:()=>[saved],wait:async()=>{},openDesktop:async()=>{n++;f.h.sessions.push(relay);return {status:'desktop_opened'};}});
+ assert.equal(result.status,'wake_requested');assert.equal(n,1);assert.equal(f.calls.filter(c=>c.name==='session.request').length,1);
+});
+
+test('desktop state reader excludes archived, remote, malformed and ambiguous metadata without writing it',t=>{
+ const dir=mkdtempSync(join(tmpdir(),'ihcp-desktop-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const account=join(dir,A,B);mkdirSync(account,{recursive:true});const file=join(account,`local_${A}.json`);
+ const d={sessionId:`local_${A}`,cliSessionId:B,title:'Game',cwd:dir,isArchived:false,envScopeId:'builtin_local',startedFromEnvironmentId:null,secretSnapshot:'must not escape'};
+ writeFileSync(file,JSON.stringify(d));const before=readFileSync(file,'utf8');
+ assert.equal(desktopSessions({roots:[dir]}).length,1);assert.equal(JSON.stringify(readDesktopSession(file)).includes('must not escape'),false);assert.equal(readFileSync(file,'utf8'),before);
+ for(const change of [{isArchived:true},{isArchived:null},{envScopeId:'ssh'},{startedFromEnvironmentId:'cloud'},{cliSessionId:'invalid'},{sessionId:`local_${B}`},{cwd:'relative'}]){
+  writeFileSync(file,JSON.stringify({...d,...change}));assert.equal(readDesktopSession(file),null);
+ }
+ writeFileSync(file,'{');assert.equal(readDesktopSession(file),null);
+});
+
+test('native desktop opener uses only registered executable, exact resume args and a durable one-attempt journal',async t=>{
+ const dir=mkdtempSync(join(tmpdir(),'ihcp-open-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const file=join(dir,`local_${A}.json`),runtimeFile=join(dir,'runtime.json'),database=join(dir,'mail.db'),journalDir=join(dir,'attempts');
+ const d={sessionId:`local_${A}`,cliSessionId:B,title:'Game',cwd:dir,isArchived:false,envScopeId:'builtin_local'};writeFileSync(file,JSON.stringify(d));
+ const db=new DatabaseSync(database);db.exec('CREATE TABLE harnesses(id TEXT,active INTEGER,config_json TEXT)');
+ const executable=join(dir,process.platform==='win32'?'claude.exe':'claude');db.prepare('INSERT INTO harnesses VALUES(?,1,?)').run('claude',JSON.stringify({type:'claude',executable,cwd:dir}));db.close();writeFileSync(runtimeFile,JSON.stringify({database}));
+ const calls=[],run=(exe,args,opts)=>{calls.push({exe,args,opts});return {status:0,stdout:'[]'};};
+ const selected=readDesktopSession(file),h={harness:'claude'};
+ assert.equal((await desktopOpener({runtimeFile,journalDir,tty:false,run})(h,selected,req)).status,'desktop_open_requires_tty');assert.equal(calls.length,0);
+ const open=desktopOpener({runtimeFile,journalDir,tty:true,run});assert.equal((await open(h,selected,req)).status,'desktop_opened');
+ assert.deepEqual(calls.at(-1).args,['--desktop','--resume',B]);assert.equal(calls.at(-1).exe,executable);assert.equal(calls.at(-1).opts.stdio,'inherit');
+ assert.equal((await open(h,selected,req)).status,'desktop_open_uncertain');assert.equal(calls.filter(c=>c.args[0]==='--desktop').length,1);
+ writeFileSync(file,JSON.stringify({...d,isArchived:true}));assert.equal((await open(h,selected,{...req,idempotency_key:'other'})).status,'desktop_identity_changed');
+ writeFileSync(file,JSON.stringify(d));
+ const running=desktopOpener({runtimeFile,journalDir,tty:true,run:(_exe,args)=>{assert.deepEqual(args,['agents','--json']);return {status:0,stdout:JSON.stringify([{sessionId:B}])};}});
+ assert.equal((await running(h,selected,{...req,idempotency_key:'running'})).status,'already_running');
+ const changed=desktopOpener({runtimeFile,journalDir,tty:true,run:(_exe,args)=>{assert.deepEqual(args,['agents','--json']);writeFileSync(file,JSON.stringify({...d,isArchived:true}));return {status:0,stdout:'[]'};}});
+ assert.equal((await changed(h,selected,{...req,idempotency_key:'race'})).status,'desktop_identity_changed');
 });

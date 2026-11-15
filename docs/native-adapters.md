@@ -2,7 +2,7 @@
 
 An **adapter** connects IHCP3K to an app's own commands. A **notification adapter** tells an existing session that a message is waiting. A **task worker** starts a separate, time-limited session to do explicitly requested work. **Retention** controls how long a worker's chat history is kept. An **endpoint revision** is a registration version used to reject outdated target mappings. See [terminology](terminology.md) for configuration terms.
 
-**v1.2.5; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
+**v1.2.6; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
 
 A request to an existing session and a new worker are different operations. `remote_prompt` sends durable mail; the configured adapter notifies the existing target. `worker` explicitly creates a separately owned session to do a bounded task. Delivery failure must not silently substitute a worker or resumed session.
 
@@ -74,18 +74,23 @@ If every runtime is closed, no timer runs. Short CLI calls do not leave a notifi
 
 ## Unloaded Claude Desktop targets
 
-Claude's CLI inventory and built-in `ListAgents`/`SendMessage` only reach loaded sessions. A temporary `-p` helper cannot access the desktop-only `ccd_session_mgmt` tools. The installed CLI's `--desktop` route does not accept a prompt. Removing an inventory check alone therefore cannot wake an unloaded desktop chat.
+The temporary CLI notification helper uses `ListAgents`/`SendMessage`, which only expose reachable processes. Desktop sessions additionally have native session-management APIs that can wake unloaded chats. These are different interfaces; a successful notification-helper launch does not prove that a suspended target can be reached.
 
-The `resolve` CLI workflow uses existing MCP requests:
+The agent runs `resolve` in a host-provided PTY, automatically:
 
-1. Refresh the permitted inventory and resolve a unique live target by name and project.
-2. If the Claude target is absent, select one existing desktop-hosted session verified against native registration metadata. Send it a correlated `ihcp.desktop-wake.v1` request. The normal nonpersistent CLI helper notifies this relay.
-3. The relay uses native `list_sessions`/`get_session` to identify the existing, non-archived target and `send_message` to wake it. It returns the desktop identity and actual delivery result. It does not perform the target's work.
-4. Refresh discovery, match the current target identity, then send the original task directly. Retain the wake request ID; never blindly repeat a pending or uncertain wake.
+1. Refresh the permitted native inventory; use an existing live target directly.
+2. If absent, inspect bounded, read-only desktop session metadata for an exact name/project/optional desktop-ID match. Require a valid CLI UUID and desktop ID, `isArchived:false`, `envScopeId:builtin_local`, and no remote environment. Reject ambiguous matches.
+3. Recheck the file and native running inventory, then invoke only the registered Claude executable with `--desktop --resume <existing-CLI-UUID>`. No prompt or replacement session is created. The command requires a PTY; the agent supplies it without asking the user to run a terminal command. App focus may change as the existing chat opens.
+4. Rediscover and verify the CLI UUID, desktop ID, name and cwd before sending the original request. Opening is not delivery; require the correlated reply for completion.
+5. If metadata cannot identify the target, use one verified live desktop session for native `list_sessions`/`get_session`/`send_message`. If none is running, first open one existing non-archived local desktop session from an unambiguous account using the same checks. Never chain relays or open a second bootstrap chat for the same attempt.
 
-No particular PA chat is required. No extra persistent chat is created, so there is nothing to archive; the CLI helper uses `--no-session-persistence`. At least one reachable desktop-hosted session with native session tools must exist. This route cannot start a closed app or wake an entirely unloaded harness. An unavailable or ambiguous target remains unresolved.
+The exact desktop ID (`local_<uuid>`) differs from the CLI UUID. The live relay returns the target’s desktop ID; resolution checks its current native binding before sending work. Archived, deleted, remote/cloud, malformed and ambiguous metadata never authorizes an open. Native registration/configuration and permission failures are not bypassed.
 
-The desktop `local_<uuid>` identity differs from the CLI process's UUID, which may change when the original chat wakes. The resolver checks native registration metadata to bind them; it never invents an IHCP3K endpoint from a title or desktop ID.
+**Compatibility:** the metadata layout is undocumented app state, accessed read-only, never modified. Windows Claude Desktop 5.11492.5.0 with CLI 2.1.296 was tested. The reader recognises the standard Windows and macOS locations; macOS native opening is not yet validated. Linux and unknown desktop layouts report unavailable. A source harness without a PTY cannot run this fallback. No transcript files, messaging keys or permission snapshots are exposed; only identity fields are used. A closed app may be launched by the native desktop-open command, but closed-app end-to-end behavior is not yet validated.
+
+Before opening, a private journal reserves one attempt per source/harness/idempotency key. Concurrent retries coalesce; failed, interrupted or uncertain opens are not repeated automatically. Re-running resolution first checks whether the original target is now live. Journal cleanup is deterministic on use: 90-day retention and at most 1,000 records. Keep the original key; if its record has expired, inspect actual state rather than blindly replay. The journal is not a database migration or OS service.
+
+No special PA session is required. The notification helper uses `--no-session-persistence` and exits, so there is no persistent throwaway chat to archive. Existing target and bootstrap chats remain intact.
 
 ## Task workers
 

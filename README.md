@@ -102,9 +102,9 @@ While waiting for an answer, replies can arrive inside the assistant's tool call
 
 MCP (Model Context Protocol) exposes IHCP3K tools to each assistant. SQLite stores messages in a private local file, without a separate database server. [Automatic cleanup](docs/retention.md) expires completed history and enforces capacity limits without AI calls. Configured notifications alert the receiving session; if every runtime is closed, messages wait until one starts again.
 
-For an unloaded Claude Desktop chat, IHCP3K can ask an already-live desktop session to wake the existing target, then deliver the request directly. It creates no replacement chat. At least one Claude Desktop session must be reachable; the CLI alone cannot start an unloaded target.
+Suspended Claude Desktop chats can be opened automatically before delivery, including when no chat is currently running. IHCP3K verifies the existing chat’s identity and excludes archived chats; it does not create a replacement. The Windows path has been tested. Desktop versions with an unfamiliar metadata layout need a compatible adapter; see [wake behavior](docs/native-adapters.md#unloaded-claude-desktop-targets).
 
-**Version 1.2.5.** Automatic notifications and a request/reply round trip have been tested between installed Claude and Codex sessions. Setup includes notifications as standard. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md), including connection-reload and closed-app limits.
+**Version 1.2.6.** Automatic notifications and a request/reply round trip have been tested between installed Claude and Codex sessions. Setup includes notifications as standard. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md), including connection-reload and closed-app limits.
 
 [Download](https://github.com/GreyManSoftware/IHCP3K/releases) · [Agent setup](AGENT_SETUP.md) · [Architecture](docs/architecture.md) · [Technical terms](docs/terminology.md)
 

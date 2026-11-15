@@ -5,7 +5,7 @@ export const commands = {
   register: ['<runtime.json> <harness-config.json> <harness-dir>', 'Register a harness once; discover its native sessions automatically.'],
   'register-session': ['<runtime.json|url> <code-file> <profile.json> <new-session-dir>', 'Legacy session enrolment; not needed by harness registration.'],
   discover: ['<harness-dir> [query.json]', 'List connected sessions this identity may contact.'],
-  resolve: ['<harness-dir> <target.json>', 'Resolve a named target; request a native desktop wake through one live Claude relay if needed.'],
+  resolve: ['<harness-dir> <target.json>', 'Resolve and wake a named target; use a PTY so an existing Claude desktop chat can be opened automatically when all chats are suspended.'],
   remote_prompt: ['<harness-dir> <request.json>', 'Send a request to an existing session; return its ID.'],
   status: ['<harness-dir> <source-session-or-request.json>', 'Check inbox counts, or one request when an ID file is supplied.'],
   check: ['<harness-dir> <source-session.json>', 'Claim waiting messages for this session to handle.'],

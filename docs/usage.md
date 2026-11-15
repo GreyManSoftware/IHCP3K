@@ -90,7 +90,7 @@ Install/relink requests are guided workflows, not extra executable CLI modes. Th
 node scripts/ihcp.mjs resolve <harness-dir> <private-target.json>
 ```
 
-Input fields are `session_id`, `harness`, `name`, `idempotency_key`, and the known project `cwd` when available. `found` returns the endpoint. For `wake_requested`, the agent handles the correlated reply and repeats resolution with `wake_request_id` and the returned `desktop_id` before sending the original work. It does not ask the user to poll. A live Claude Desktop session must be available as a relay; the standalone CLI cannot wake an unloaded desktop chat by itself.
+Input fields are `session_id`, `harness`, `name`, `idempotency_key`, and the known project `cwd` when available. `found` returns the endpoint. For `wake_requested`, the agent handles the correlated reply and repeats resolution with `wake_request_id` and the returned `desktop_id` before sending the original work. It does not ask the user to poll. Agents run this helper with their host’s PTY option (for example `exec_command` with `tty:true`), so it can open a verified existing desktop chat automatically even if none is running. `desktop_open_requires_tty` means rerun the same request in a PTY, not hand a command to the user. Missing PTY support, unknown metadata, identity changes and ambiguous targets are explicit limitations; never change the idempotency key to retry an uncertain open.
 
 ## From a terminal
 

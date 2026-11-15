@@ -83,7 +83,7 @@ function equal(a,b) { const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length
 function reject(res,code,error) { res.writeHead(code,{'Content-Type':'application/json'});res.end(JSON.stringify({error})); }
 
 export function createToolServer(store,directory,principal,abort=new AbortController(),resolvePrincipal=()=>principal){
-    const server=new McpServer({name:'ihcp3k',version:'1.2.5'});
+    const server=new McpServer({name:'ihcp3k',version:'1.2.6'});
     if(store.harnesses)for(const [name,inputSchema] of Object.entries(harnessSchemas)){
       if(name.startsWith('session.worker_')&&!store.workers)continue;
       const permitted=name==='harness.register'?principal.permissions.includes('registry'):principal.permissions.includes('harness');
@@ -97,7 +97,7 @@ export function createToolServer(store,directory,principal,abort=new AbortContro
             try{await store.harnesses.refresh(args.harness,{force:true,signal});value.discovery={status:'ready',sessions:store.db.prepare('SELECT count(*) n FROM harness_sessions s JOIN endpoints e ON e.id=s.endpoint WHERE s.harness=? AND e.active=1').get(args.harness).n};}
             catch(e){value.discovery={status:'unavailable',error:e.code??'DISCOVERY_FAILED'};}
           }
-          else if(name==='harness.health')value={version:'1.2.5',schema_version:6,instance_id:store.instanceId};
+          else if(name==='harness.health')value={version:'1.2.6',schema_version:6,instance_id:store.instanceId};
           else if(name==='harness.discover')value=await store.harnesses.discover(current,args,signal);
           else if(name==='harness.unregister')value=store.harnesses.unregister(current);
           else{const op=name.slice(8);value=await store.harnesses.invoke(current,sessionMethods[op]??op,args,signal);}

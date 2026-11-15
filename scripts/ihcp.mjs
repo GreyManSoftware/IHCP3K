@@ -6,6 +6,7 @@ import {spawnSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {parseInvocation} from './usage.mjs';
 import {resolveTarget} from './resolve-target.mjs';
+import {desktopOpener} from './desktop-open.mjs';
 import {listenInbox} from './listen-inbox.mjs';
 import {update} from './update.mjs';
 import {connect,call,exchange} from '../service/dist/client.mjs';
@@ -108,7 +109,7 @@ export async function main(args=process.argv.slice(2)){
    if(!harness.linked)throw Error('HARNESS_UNREGISTERED');
    return withClient(harness.runtime_file,path.join(dir,'harness.tok'),async c=>{
      if(mode==='discover'||mode==='refresh')return call(c,'harness.discover',{force:mode==='refresh',...(input?read(input):{})});
-     if(mode==='resolve')return resolveTarget(c,read(input),{invoke:call});
+     if(mode==='resolve')return resolveTarget(c,read(input),{invoke:call,openDesktop:desktopOpener({runtimeFile:harness.runtime_file,journalDir:path.join(dir,'wake-attempts')})});
      if(mode==='listen'){
        const stop=new AbortController(),cancel=()=>stop.abort();
        process.once('SIGINT',cancel);process.once('SIGTERM',cancel);
