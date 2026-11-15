@@ -8,6 +8,10 @@ A real update of a 1.2.3 installation stopped safely before activation because t
 
 The read-only `harness.health` tool identifies the process actually serving a native connection, allowing agents to distinguish an old connection from the newly installed runtime. Fresh-client health and native-host health are separate checks.
 
+On 15 November 2026, the managed updater successfully upgraded a live Windows installation from 1.2.3 to the published 1.2.5 package. Fresh MCP health reported 1.2.5, the database integrity check passed, shared skill links remained intact, and a subsequent update check reported current. Existing credentials, registrations and unrelated MCP settings were preserved. The downloaded archive matched GitHub's published SHA-256 digest.
+
+Both open native chats could still discover peers, and Claude returned a correlated verification reply. Their existing tool catalogues did not expose the new health tool, so native serving-version verification remains pending reconnect. Codex's supported reload endpoint was unavailable (Windows error 10050); the updater reported the restart requirement and did not restart either app. This validates installation and continued communication, not automatic refresh of every open chat.
+
 
 ## 1.2.4 managed updates
 
