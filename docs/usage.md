@@ -2,6 +2,14 @@
 
 A harness is the app running your assistant. Install the [harness-interop skill](../skills/harness-interop/SKILL.md) and register your harnesses once using [agent setup](../AGENT_SETUP.md) first.
 
+## Which route to use
+
+- Codex to another local Codex chat: use Codex's native messaging.
+- Codex to Claude, or Claude to Codex: use IHCP3K.
+- An explicit IHCP3K command or protocol test: use IHCP3K, even within one harness.
+
+For example, "Ask the backend chat about the API" stays within your current harness when that chat is local. "Ask Claude's backend chat about the API" from Codex uses IHCP3K. Installing the skill does not redirect every chat message through it.
+
 ## In a conversation
 
 Tell the assistant to use the skill, then give it a mode and the information it needs:

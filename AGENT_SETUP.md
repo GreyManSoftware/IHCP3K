@@ -84,6 +84,8 @@ Existing chats may need a native configuration reload. Do not restart apps or br
 
 ## Discovery, requests and replies
 
+Installing IHCP3K does not replace native chat coordination. Ordinary requests between local Codex chats use native Codex thread discovery and messaging; apply the equivalent native route in other harnesses. Use IHCP3K for cross-harness requests or an explicit IHCP3K command, notification or test. Do not install a blanket rule routing every session message through this skill. A session name alone is not evidence of a cross-harness destination.
+
 Call `harness.discover` or `node scripts/ihcp.mjs discover <harness-dir>`. It refreshes the permitted harness inventories, returning stable session addresses, native IDs, labels, working folders and observed state. Successful snapshots are cached for 15 seconds; `/refresh` forces a rescan. Discovery and outgoing requests trigger refresh; there is no AI polling or permanently installed discovery service.
 
 A complete successful scan adds new sessions and disables missing ones. Failed or partial scans retain the last inventory with an explicit error/stale flag; they do not authorize sending against that failed scan. A label is for display, not routing. Use the exact returned address.

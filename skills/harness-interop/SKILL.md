@@ -1,11 +1,17 @@
 ---
 name: harness-interop
-description: Register or unregister a harness once, discover its sessions and advertised models, or send authorized requests through remote_prompt or plain language such as "Ask Codex if the backend session knows about ABC". Also show command help or run an explicitly configured worker. Ordinary prompts stay local.
+description: Set up, register, unregister or inspect IHCP3K; discover connected harnesses and models; handle IHCP3K notifications; or send authorized cross-harness requests through remote_prompt or plain language. For ordinary chats within the current harness, use its native discovery and messaging tools instead. Explicit IHCP3K requests may use this skill within one harness.
 ---
 
 # Harness interop
 
 Use IHCP3K **1.2.1**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
+
+## Choose the communication route
+
+For ordinary communication between chats in the current harness, use that harness's native discovery and messaging tools. In Codex, local chat requests use native thread discovery and messaging; they do not require IHCP3K registration or this skill. For requests to a different harness, use IHCP3K. Explicit IHCP3K commands, notifications and protocol tests still use this skill, including deliberate same-harness tests.
+
+A session name alone does not imply a remote harness. Resolve it using native local discovery and the user's context first; ask only if the destination remains ambiguous. Do not silently fall back to IHCP3K when native messaging is unavailable or denied. Preserve the destination and the user's authorization.
 
 ## Usage assistance
 
