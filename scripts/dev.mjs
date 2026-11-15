@@ -39,7 +39,7 @@ try {
       prepare();
       tooling('service','ihcp3k-service-deps','npm test');
       tooling('adapters/claude-waiter','ihcp3k-waiter-deps','npm test');
-      docker(['run','--rm','--cpus','2','--mount',`type=bind,source=${path.join(root,'scripts')},target=/scripts,readonly`,image,'node','--test','/scripts/native-queue.test.mjs','/scripts/usage.test.mjs']);
+      docker(['run','--rm','--cpus','2','--mount',`type=bind,source=${path.join(root,'scripts')},target=/scripts,readonly`,image,'node','--test','/scripts/native-queue.test.mjs','/scripts/usage.test.mjs','/scripts/resolve-target.test.mjs']);
       docker(['run','--rm','--cpus','2','--mount',`type=bind,source=${root},target=/repo,readonly`,image,'node','--test','/repo/adapters/claude-legacy/test/*.test.mjs']);
       docker(['run','--rm','--cpus','2','--mount',`type=bind,source=${root},target=/repo,readonly`,image,'node','--test','--test-concurrency=1','/repo/scripts/local-install.test.mjs']);
     } finally {if(fd!==undefined){fs.closeSync(fd);fs.unlinkSync(lockPath);}}

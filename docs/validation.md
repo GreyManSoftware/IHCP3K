@@ -1,5 +1,16 @@
 # Validation
 
+## 1.2.2 target resolution and setup checks
+
+The full pinned-container suite passed: **131 tests** (85 service, 16 legacy waiter, 9 queue/help/resolver, 13 legacy import, 8 installer). The six resolver tests cover direct delivery, one verified desktop relay, stale/ambiguous/unsupported discovery, identity changes after wake, retry suppression, malformed input and bounded native registration metadata. Existing help tests also cover the new command. The Windows installer checks passed separately before this change; the final full installer run was in Linux containers.
+
+Live Windows checks established the actual Claude boundary: a nonpersistent CLI helper could not list an unloaded desktop target, and an explicit native `SendMessage` to its exact name failed as unreachable. `--desktop` refused a prompt. Native messaging from a desktop-hosted session then woke the existing target, which acknowledged receipt over IHCP3K without doing project work or creating a chat. The desktop identity stayed the same while its native process UUID changed. The new resolver subsequently found that live target by name and project.
+
+The offline wake was exercised through the same request/notification/native-desktop components used by the resolver, before adding the CLI orchestration. It was not a fresh-install rehearsal of the final packaged command against an unloaded target. Do not describe these component checks as proof that a standalone CLI can wake every offline chat or start a closed app. At least one reachable desktop session with native session-management tools is required.
+
+Setup now reuses verified local packages and keeps lifecycle/destructive tests out of ordinary installation. Local chat coordination continues through native harness tools; IHCP3K handles cross-harness requests and explicit protocol operations.
+
+
 This page distinguishes automated tests from checks performed in real agent applications. A **fixture** is controlled test data or a simulated app response; a **rehearsal** exercises a specific real workflow. Neither proves compatibility with every app version. Technical terms are defined in [terminology](terminology.md).
 
 ## Version 1.2.1: automatic notifications

@@ -5,6 +5,7 @@ import {randomBytes,createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {parseInvocation} from './usage.mjs';
+import {resolveTarget} from './resolve-target.mjs';
 import {connect,call,exchange} from '../service/dist/client.mjs';
 const read=f=>JSON.parse(fs.readFileSync(f,'utf8').replace(/^\uFEFF/,''));
 const write=(f,v)=>fs.writeFileSync(f,JSON.stringify(v,null,2)+'\n',{mode:0o600});
@@ -104,6 +105,7 @@ export async function main(args=process.argv.slice(2)){
    if(!harness.linked)throw Error('HARNESS_UNREGISTERED');
    return withClient(harness.runtime_file,path.join(dir,'harness.tok'),async c=>{
      if(mode==='discover'||mode==='refresh')return call(c,'harness.discover',{force:mode==='refresh',...(input?read(input):{})});
+     if(mode==='resolve')return resolveTarget(c,read(input),{invoke:call});
      if(mode==='unlink'){const result=await call(c,'harness.unregister',{});write(harnessFile,{...harness,linked:false});return result;}
      if(['worker','worker-status','worker-ack'].includes(mode)){
        if(!input)return parseInvocation([mode,'--help']);

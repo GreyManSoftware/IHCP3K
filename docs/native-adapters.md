@@ -2,7 +2,7 @@
 
 An **adapter** connects IHCP3K to an app's own commands. A **notification adapter** tells an existing session that a message is waiting. A **task worker** starts a separate, time-limited session to do explicitly requested work. **Retention** controls how long a worker's chat history is kept. An **endpoint revision** is a registration version used to reject outdated target mappings. See [terminology](terminology.md) for configuration terms.
 
-**v1.1.0; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
+**v1.2.2; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
 
 A request to an existing session and a new worker are different operations. `remote_prompt` sends durable mail; the configured adapter notifies the existing target. `worker` explicitly creates a separately owned session to do a bounded task. Delivery failure must not silently substitute a worker or resumed session.
 
@@ -10,7 +10,7 @@ A request to an existing session and a new worker are different operations. `rem
 
 Version 1.1 registers a harness once. Codex's read-only [`thread/list`](https://learn.chatgpt.com/docs/app-server) and Claude's `agents --json` provide automatic session inventories; new sessions need no per-session credentials. See [agent setup](../AGENT_SETUP.md) for supported scope and limits.
 
-An optional `notification` template in the private harness registration is inherited by discovered sessions. The runtime fills the exact native ID and current session revision. Codex templates use `codex-queue`; Claude templates use `claude-message` only after validating support for the discovery listing's exact IDs. A previous test with a different short reference does not establish that support. Unsupported targets leave messages pending, rather than prompting per-session registration or silently starting another chat.
+A required `notification` template in the private harness registration is inherited by discovered sessions. The runtime fills the exact native ID and current session revision. Codex templates use `codex-queue`; Claude templates use `claude-message` only after validating support for the discovery listing's exact IDs. A previous test with a different short reference does not establish that support. Unsupported targets leave messages pending, rather than prompting per-session registration or silently starting another chat.
 
 The explicit `runtime.notifications` maps below remain available for legacy/manual adapter configuration. They are not required for registering every newly discovered session. Worker configuration may allow an entire registered harness with `allow_harnesses`, with source-specific results still isolated by the explicit session identity.
 
@@ -61,6 +61,21 @@ For current Claude harness registration, set `binding_mode:"session-file"`. The 
 Use an identifier the installed native listing actually exposes. In the Windows rehearsal, `ListAgents` exposed a short bracketed session reference, not the desktop's internal session UUID. The UUID attempt correctly stopped without sending; an independently verified exact reference succeeded with the full restricted flags. Record that reference's owning host and current session binding, and revalidate on relink. A title alone is not a substitute, and a reference is not guaranteed portable across hosts or future sessions.
 
 If every runtime is closed, no timer runs. Short CLI calls do not leave a notification process behind. Missing native access leaves durable mail pending for an explicit manual check; uncertain dispatch needs reconciliation before reset. No scheduler, background service, screen automation or central relay is installed implicitly.
+
+## Unloaded Claude Desktop targets
+
+Claude's CLI inventory and built-in `ListAgents`/`SendMessage` only reach loaded sessions. A temporary `-p` helper cannot access the desktop-only `ccd_session_mgmt` tools. The installed CLI's `--desktop` route does not accept a prompt. Removing an inventory check alone therefore cannot wake an unloaded desktop chat.
+
+The `resolve` CLI workflow uses existing MCP requests:
+
+1. Refresh the permitted inventory and resolve a unique live target by name and project.
+2. If the Claude target is absent, select one existing desktop-hosted session verified against native registration metadata. Send it a correlated `ihcp.desktop-wake.v1` request. The normal nonpersistent CLI helper notifies this relay.
+3. The relay uses native `list_sessions`/`get_session` to identify the existing, non-archived target and `send_message` to wake it. It returns the desktop identity and actual delivery result. It does not perform the target's work.
+4. Refresh discovery, match the current target identity, then send the original task directly. Retain the wake request ID; never blindly repeat a pending or uncertain wake.
+
+No particular PA chat is required. No extra persistent chat is created, so there is nothing to archive; the CLI helper uses `--no-session-persistence`. At least one reachable desktop-hosted session with native session tools must exist. This route cannot start a closed app or wake an entirely unloaded harness. An unavailable or ambiguous target remains unresolved.
+
+The desktop `local_<uuid>` identity differs from the CLI process's UUID, which may change when the original chat wakes. The resolver checks native registration metadata to bind them; it never invents an IHCP3K endpoint from a title or desktop ID.
 
 ## Task workers
 

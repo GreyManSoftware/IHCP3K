@@ -1,6 +1,6 @@
 # Agent setup and operation
 
-Install **IHCP3K 1.2.1** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
+Install **IHCP3K 1.2.2** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
 
 ## First install
 
@@ -30,6 +30,8 @@ The supported automatic discovery adapters are:
 - **Codex:** `codex app-server --stdio`, using read-only `thread/list` with pagination, non-archived threads and state-database-only metadata. It does not read message history or start/resume a thread. Status comes from this inventory connection and is not proof of the desktop session's live status. A deliberately configured `transport:"proxy"` uses the running app-server proxy; there is no silent fallback between routes.
 - **Claude:** `claude agents --json`, listing the interactive/background sessions exposed by that installed CLI. Closed historical chats not exposed by this command are not invented or inferred from transcript files.
 - **Other harnesses:** automatic discovery is not yet implemented. Report the missing adapter; do not present manual per-session registration as a successful harness-wide install. Copilot's earlier experimental notification code does not establish discovery support.
+
+For a named Claude Desktop chat absent from the live CLI listing, the skill's `resolve` workflow can request a wake through an already-live desktop session. The temporary CLI helper notifies that relay; the relay uses native desktop messaging, then discovery finds the target. No designated management chat or new persistent relay is needed. At least one reachable Claude Desktop session is required: a standalone CLI helper cannot wake an unloaded desktop chat by itself. An absent CLI row does not mean a deleted or unregistered chat. See [native adapters](docs/native-adapters.md#unloaded-claude-desktop-targets).
 
 Prepare a private configuration (replace every placeholder):
 

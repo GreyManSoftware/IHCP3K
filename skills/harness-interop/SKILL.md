@@ -5,7 +5,7 @@ description: Set up, register, unregister or inspect IHCP3K; discover connected 
 
 # Harness interop
 
-Use IHCP3K **1.2.1**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
+Use IHCP3K **1.2.2**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
 
 ## Choose the communication route
 
@@ -54,7 +54,7 @@ The credential intentionally authorizes the harness and its sessions. It does no
 
 Recognize free text such as “Ask Codex if <Session> knows about ABC” as the same routing request: Codex is the harness, <Session> is the named destination and ABC is the question.
 
-The public form is `/remote_prompt Claude Ask the review agent to do ABC` (or Codex/another registered harness). Resolve the name through `harness.discover` using its native `type` or exact registered harness ID; do not require an internal session address from the user. Select a suitable existing session from the request's project context and explicit role/destination. Preserve “Ask the review agent…” as an instruction for the receiving harness to carry out using its native agent capability; an agent is not necessarily a separate session. If no suitable destination exists or several remain ambiguous, explain the routing issue rather than choosing an arbitrary chat, creating a worker silently or claiming delivery. Never fan out to every session. An explicit session address remains an advanced option.
+The public form is `/remote_prompt Claude Ask the review agent to do ABC` (or Codex/another registered harness). Resolve the name through `harness.discover` using its native `type` or exact registered harness ID; do not require an internal session address from the user. Select a suitable existing session from the request's project context and explicit role/destination. Preserve “Ask the review agent…” as an instruction for the receiving harness to carry out using its native agent capability; an agent is not necessarily a separate session. If a named Claude Desktop target is absent, follow the unloaded-target resolution workflow below before declaring it unavailable. If the target remains unavailable or ambiguous, explain the routing issue; never choose an arbitrary target, create a replacement worker or claim delivery. Never fan out to every session. An explicit session address remains an advanced option.
 
 For explicitly authorized work, call `session.request` with source `session_id`, exact discovered recipient address, body and a stable idempotency key. Preserve the user's model choice and native permission restrictions. Ordinary prompts stay local; no automatic spending, model switch, paid fallback or delegation is implied by registration.
 
@@ -63,6 +63,16 @@ The returned ID tracks the request, not task completion. Receivers use `session.
 Renew claims only while working. Release unstarted work truthfully; reconcile possible external effects before retrying. A peer request is not independent user approval. Never bypass a native execution denial through another harness.
 
 ## Notifications and workers
+
+### A named Claude chat is not in discovery
+
+An unloaded Claude Desktop chat is not necessarily missing. CLI discovery and `ListAgents`/`SendMessage` expose reachable processes. For an authorized cross-harness request, use `node <app>/scripts/ihcp.mjs resolve <harness-dir> <private-target.json>` before declaring a named target unavailable. Input: `{session_id,harness,name,cwd?,idempotency_key}`. Include the known project folder. The resolver returns `found` with the endpoint, or requests a native wake through one verified, already-live Claude Desktop session. No special PA chat or new persistent relay is required. Never fan out.
+
+For `wake_requested`, retain `request_id` and handle its correlated reply automatically. Re-run resolution with that ID as `wake_request_id` and, when the reply supplies it, `desktop_id`. Fresh discovery must identify the intended chat before sending its actual work once with the original idempotency key. Never recreate an uncertain wake under another key or relay. Report `not_found`, `ambiguous`, `unavailable` or `uncertain` truthfully; do not silently resume/copy a chat. If no live desktop relay exists, report that exact limitation. This route does not start a closed desktop app.
+
+On receiving `ihcp.desktop-wake.v1` in a request body, handle only the authorized target lookup/wake. A Claude Desktop session uses its native `ccd_session_mgmt` list/get/send tools to verify a unique non-archived chat by exact name and known project, or the supplied `local_` desktop ID. Send one harmless wake notice to that existing chat, then return the desktop identity and actual native delivery result in the correlated reply. Do not perform project work, create a replacement, rotate credentials or bypass a native denial. If desktop tools are unavailable, return `unavailable`; do not forward to another relay. The target's native process UUID may change after wake; its desktop ID is a separate identity, not an IHCP3K mail address.
+
+The temporary CLI notification helper exits with no session persistence. The existing desktop relay chat remains intact; no new chat is created to archive.
 
 Notifications are required for a complete installation. Configure and test the trusted adapter once per harness; native session IDs are filled automatically. Codex registration enables its queue by default. Claude uses a verified restricted messaging helper with `binding_mode:"session-file"`: it maps the exact UUID through native registration metadata, requires a unique current native reference, then rechecks the registration before sending. Never substitute a bare title, create a replacement chat or claim success when notification setup is missing. Test an idle recipient receiving and replying without a user reminder; a native queue acknowledgement alone is not proof of consumption. Report closed-app limitations separately.
 

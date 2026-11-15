@@ -59,6 +59,7 @@ The skill also supports the lower-level modes below. Each must offer usage assis
 | --- | --- |
 | `register` | Register one harness, with its native discovery adapter, profile and permitted peer harnesses. No individual chat enrolment. |
 | `discover` | List permitted sessions or their advertised models. |
+| `resolve` | Resolve a named target or request a Claude Desktop wake through one existing desktop session. |
 | `remote_prompt` | Send a request to a named harness; the skill resolves the destination session. |
 | `status` | Inspect a request ID, or inbox counts with `status inbox` (the skill supplies the current source ID). |
 | `unregister` | Disconnect an explicitly named harness and all its session addresses. |
@@ -78,6 +79,14 @@ The skill also supports the lower-level modes below. Each must offer usage assis
 | `exchange` | Legacy send-and-wait; returned mail may be unrelated to the request. |
 
 Install/relink requests are guided workflows, not extra executable CLI modes. They also require help and collection of missing details before changes.
+
+## Resolve an unloaded Claude chat
+
+```sh
+node scripts/ihcp.mjs resolve <harness-dir> <private-target.json>
+```
+
+Input fields are `session_id`, `harness`, `name`, `idempotency_key`, and the known project `cwd` when available. `found` returns the endpoint. For `wake_requested`, the agent handles the correlated reply and repeats resolution with `wake_request_id` and the returned `desktop_id` before sending the original work. It does not ask the user to poll. A live Claude Desktop session must be available as a relay; the standalone CLI cannot wake an unloaded desktop chat by itself.
 
 ## From a terminal
 
