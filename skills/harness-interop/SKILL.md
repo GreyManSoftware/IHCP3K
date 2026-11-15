@@ -5,7 +5,7 @@ description: Set up, update, register, unregister or inspect IHCP3K; discover co
 
 # Harness interop
 
-Use IHCP3K **1.2.6**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
+Use IHCP3K **1.3.0**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
 
 ## Choose the communication route
 
@@ -71,6 +71,16 @@ For explicitly authorized work when awaiting an answer, prefer `session.exchange
 The returned ID tracks the request, not task completion. Receivers use `session.claim`, inspect sender/scope, then `session.reply` with their source ID, current claim fields and a stable reply key. Match `in_reply_to` before presenting the answer. Complete received reply claims normally. Do not generate acknowledgement-only chatter.
 
 Renew claims only while working. Release unstarted work truthfully; reconcile possible external effects before retrying. A peer request is not independent user approval. Never bypass a native execution denial through another harness.
+
+## One-off work without a destination session
+
+For an authorized self-contained task, `/remote_prompt Claude Review this in a new one-off session` starts one worker that does the work itself. A general request for another harness to perform a self-contained task may use this route when no suitable session exists and delegation is authorized. A request specifically to a named chat, a discovery query or peer text alone does not authorize a replacement. Existing-session routing rules above still apply to named destinations. If creation is not authorized or supported, report no suitable destination; never choose an arbitrary chat.
+
+Run `node <app>/scripts/ihcp.mjs remote_prompt <harness-dir> <private-request.json>` with `{session_id,harness,prompt,context?,working_folder?,model?,permissions:"read-only",allow_new_session:true,idempotency_key}`. Resolve the exact registered harness ID, preserve the user's model and provide the relevant task/context, never credentials. Omit `recipient`; never combine the two destination forms. Working folder defaults to the install root; provide a project folder when needed. With no model, use the target's native default. `timeout_ms` defaults to 180,000 and may be at most 300,000.
+
+The CLI keeps its connection open through the result and returns the answer, durable job ID and source `reply_to`. The native MCP equivalent is `session.remote_prompt` followed by `session.worker_wait/status` on the same owning connection. Present the actual answer once; do not add a relay or second mail request. Inspect/preserve the result before `session.worker_ack` or CLI `worker-ack`. `/status` accepts private JSON `{session_id,worker_id}`. After interruption inspect the original job; never use a new key to bypass uncertain effects.
+
+One-off Claude/Codex workers currently support read-only tasks only. Report write requests unsupported rather than silently widening or downgrading them. No paid fallback, model substitution or account switch. Claude exposes Read/Glob/Grep with MCP, hooks and skills disabled. Codex retains native policy/authentication, disables hooks/plugins/apps/delegation, inspects effective MCP configuration and disables its servers before starting a read-only worker. Unsupported native interfaces fail closed. Workers use nonpersistent native sessions; never delete existing chats or raw transcripts. Native logs/account retention may remain. Durable results follow automatic database retention. Unknown harnesses require a tested adapter.
 
 ## Notifications and workers
 

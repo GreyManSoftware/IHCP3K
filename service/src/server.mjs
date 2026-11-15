@@ -60,6 +60,7 @@ const harnessSchemas={
  'harness.discover':{force:z.boolean().default(false)},
  'harness.health':{},
  'harness.unregister':{},
+ 'session.remote_prompt':{session_id:z.string().min(1).max(256),harness:recipient,prompt:z.string().min(1).max(65536),context:z.string().max(65536).optional(),working_folder:z.string().max(4096).optional(),model:z.string().min(1).max(200).optional(),permissions:z.literal('read-only').default('read-only'),allow_new_session:z.literal(true),timeout_ms:z.number().int().min(1000).max(300000).default(180000),idempotency_key:z.string().min(1).max(200)},
  'session.request':{session_id:z.string().min(1).max(256),...schemas['mail.request']},
  'session.exchange':{session_id:z.string().min(1).max(256),...schemas['mail.request'],timeout_ms:z.number().int().min(0).max(25000).default(25000)},
  'session.wait':{session_id:z.string().min(1).max(256),timeout_ms:z.number().int().min(0).max(25000).default(25000)},
@@ -83,7 +84,7 @@ function equal(a,b) { const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length
 function reject(res,code,error) { res.writeHead(code,{'Content-Type':'application/json'});res.end(JSON.stringify({error})); }
 
 export function createToolServer(store,directory,principal,abort=new AbortController(),resolvePrincipal=()=>principal){
-    const server=new McpServer({name:'ihcp3k',version:'1.2.6'});
+    const server=new McpServer({name:'ihcp3k',version:'1.3.0'});
     if(store.harnesses)for(const [name,inputSchema] of Object.entries(harnessSchemas)){
       if(name.startsWith('session.worker_')&&!store.workers)continue;
       const permitted=name==='harness.register'?principal.permissions.includes('registry'):principal.permissions.includes('harness');
@@ -97,7 +98,7 @@ export function createToolServer(store,directory,principal,abort=new AbortContro
             try{await store.harnesses.refresh(args.harness,{force:true,signal});value.discovery={status:'ready',sessions:store.db.prepare('SELECT count(*) n FROM harness_sessions s JOIN endpoints e ON e.id=s.endpoint WHERE s.harness=? AND e.active=1').get(args.harness).n};}
             catch(e){value.discovery={status:'unavailable',error:e.code??'DISCOVERY_FAILED'};}
           }
-          else if(name==='harness.health')value={version:'1.2.6',schema_version:6,instance_id:store.instanceId};
+          else if(name==='harness.health')value={version:'1.3.0',schema_version:6,instance_id:store.instanceId};
           else if(name==='harness.discover')value=await store.harnesses.discover(current,args,signal);
           else if(name==='harness.unregister')value=store.harnesses.unregister(current);
           else{const op=name.slice(8);value=await store.harnesses.invoke(current,sessionMethods[op]??op,args,signal);}

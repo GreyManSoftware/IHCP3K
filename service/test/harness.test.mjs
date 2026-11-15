@@ -6,6 +6,7 @@ import {join} from 'node:path';
 import {snapshot,restore} from '../src/backup.mjs';
 import {SharedStore} from '../src/shared-store.mjs';
 import {sessionAddress} from '../src/harness-registry.mjs';
+import {WorkerManager} from '../src/worker-manager.mjs';
 const admin={id:'admin',permissions:['registry']};
 const profile={label:'Synthetic',source:'test',observed_at:new Date().toISOString(),fresh_for_s:600,models:[],usage:[],wake:{type:'manual',lifetime:'test',closed_app:'unknown',human_fallback:'check'}};
 const row=id=>({native_id:id,label:id,cwd:'/synthetic',state:'idle'});
@@ -16,6 +17,37 @@ function fixture(t){
  const register=(id,peers=undefined,credential=(id==='alpha'?'a':'b').repeat(43))=>r.register(admin,{harness:id,credential,discovery:{type:'codex',executable:'/native/codex',cwd:'/'+id},profile,peers});
  register('alpha');register('beta');return {store,r,inventory,register,a:r.authenticate('a'.repeat(43)),b:r.authenticate('b'.repeat(43))};
 }
+
+test('harness-only remote work needs no target session; correlation, scope and duplicate prevention survive completion',async t=>{
+ const {store,r,a,b,inventory}=fixture(t);inventory.beta=[];let calls=0,configUsed,inputUsed;
+ store.workers=new WorkerManager(store,{}, {run:async(config,input)=>{calls++;configUsed=config;inputUsed=input;return {status:'completed',exited:true,answer:'A useful answer',persisted:false};}});
+ store.workers.defaultDirectory=tmpdir();t.after(()=>store.workers.stop());
+ const args={session_id:'a1',harness:'beta',prompt:'Review this',context:'example code',allow_new_session:true,idempotency_key:'one-job',model:'test-model'};
+ const first=await r.invoke(a,'remote_prompt',args);
+ const result=await r.invoke(a,'worker_wait',{session_id:'a1',id:first.id,timeout_ms:1000});
+ assert.equal(result.state,'completed');assert.equal(result.result.answer,'A useful answer');
+ assert.equal(first.reply_to,sessionAddress('alpha','a1'));assert.equal(first.working_folder,tmpdir());
+ assert.equal(configUsed.executable,'/native/codex');assert.equal(configUsed.persist,false);assert.equal(configUsed.managed_read_only,true);
+ assert.equal(configUsed.model,'test-model');assert.match(inputUsed.prompt,/example code/);
+ assert.equal((await r.invoke(a,'remote_prompt',args)).id,first.id);assert.equal(calls,1);
+ await assert.rejects(r.invoke(a,'remote_prompt',{...args,prompt:'changed'}),/IDEMPOTENCY_CONFLICT/);
+ await assert.rejects(r.invoke(a,'worker_status',{session_id:'a2',id:first.id}),/FORBIDDEN/);
+ await assert.rejects(r.invoke(a,'remote_prompt',{...args,session_id:'b1'}),/SESSION_NOT_DISCOVERED/);
+ for(const [change,error] of [
+  [{allow_new_session:false},'NEW_SESSION_NOT_AUTHORIZED'],[{permissions:'workspace-write'},'REMOTE_WORK_PERMISSION_UNSUPPORTED'],
+  [{harness:'unknown'},'HARNESS_NOT_REGISTERED_OR_PERMITTED'],[{working_folder:'relative'},'ABSOLUTE_WORKING_FOLDER_REQUIRED'],
+  [{model:'--unsafe'},'INVALID_MODEL'],[{executable:'/bin/sh'},'INVALID_REMOTE_WORK_FIELD'],
+  [{timeout_ms:300001},'INVALID_TIMEOUT'],[{prompt:'x'.repeat(65537)},'INVALID_PROMPT']
+ ])await assert.rejects(r.invoke(a,'remote_prompt',{...args,...change}),new RegExp(error));
+ const nativeDefault=await r.invoke(a,'remote_prompt',{...args,model:undefined,idempotency_key:'native-default'});
+ await r.invoke(a,'worker_wait',{session_id:'a1',id:nativeDefault.id,timeout_ms:1000});
+ assert.equal(configUsed.native_default_model,true);assert.equal(configUsed.model,undefined);
+ store.db.prepare('UPDATE harnesses SET peers_json=? WHERE id=?').run('[]','beta');
+ await assert.rejects(r.invoke(a,'remote_prompt',{...args,idempotency_key:'denied'}),/HARNESS_NOT_REGISTERED_OR_PERMITTED/);
+ r.unregister(b);
+ await assert.rejects(r.invoke(a,'remote_prompt',args),/HARNESS_NOT_REGISTERED_OR_PERMITTED/);
+ assert.equal(calls,2);
+});
 
 test('quiet listener owns a renewable lease, never claims, and restores notification fallback',async t=>{
  const {store,r,a,b}=fixture(t);await r.discover(a);

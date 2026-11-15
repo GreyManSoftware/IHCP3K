@@ -3,11 +3,13 @@ import {isAbsolute, win32, join} from 'node:path';
 import {homedir} from 'node:os';
 import {readdirSync,lstatSync,readFileSync} from 'node:fs';
 import {buildCopilotAhpNotification, notifyCopilotAhp} from './copilot-ahp.mjs';
+import {codexWorkerPolicy,restrictedCodexArgs} from './codex-worker-policy.mjs';
 
 /**
- * Trust boundary: config comes ONLY from operator-owned local runtime configuration,
- * never directory bindings, mail, prompts or model output. This module does not load
- * config, infer authorization, retry, select accounts/models, or maintain a ledger.
+ * Trust boundary: executable/config authority is local operator configuration or
+ * the harness registry's validated one-off builder. Mail, profile text and model
+ * output never select commands. The builder may carry authorized model/cwd fields.
+ * This module does not infer authority, retry, select accounts, or own the ledger.
  *
  * Config: {enabled:true, type, executable:absolutePath, cwd:absolutePath,
  *   model, permissions:'read-only', persist:false, timeout_ms:30000,
@@ -75,8 +77,8 @@ export function claudeSessionBinding(stableId, directory=join(homedir(),'.claude
 }
 
 function claudeArgs(config, message) {
-  const tools = message ? 'Read,ListAgents,SendMessage' : 'Read';
-  return ['-p', '--model', config.model, '--output-format', 'json',
+  const tools = message ? 'Read,ListAgents,SendMessage' : 'Read,Glob,Grep';
+  return ['-p', ...(config.model?['--model',config.model]:[]), '--output-format', 'json',
     '--max-turns', String(config.max_turns ?? 6), '--permission-mode', 'dontAsk',
     '--tools', tools, '--allowedTools', tools, '--disallowedTools', 'mcp__*',
     '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
@@ -124,9 +126,10 @@ export function buildNativeCommand(config, operation, input={}) {
     if (!text(input.prompt, 65536) || Buffer.byteLength(input.prompt) > 65536) return unsupported('invalid_prompt');
     stdin = input.prompt;
     if (config.type === 'codex-worker') {
-      if (config.constraint_reviewed !== true) return unsupported('codex_constraint_review_required');
+      if (config.constraint_reviewed !== true && config.managed_read_only !== true) return unsupported('codex_constraint_review_required');
       args = ['--ask-for-approval', 'never', 'exec', '--sandbox', 'read-only', '--json',
-        '--model', config.model, '--cd', config.cwd, ...(!persisted ? ['--ephemeral'] : []), '-'];
+        ...(config.model?['--model',config.model]:[]), '--cd', config.cwd, ...(!persisted ? ['--ephemeral'] : []), '-'];
+      if(config.managed_read_only===true){args.splice(args.indexOf('exec')+1,0,'--skip-git-repo-check');args.unshift(...restrictedCodexArgs);}
     } else if (config.type === 'claude-worker') args = claudeArgs(config, false);
     else {
       if (config.experimental !== true) return unsupported('copilot_experimental_opt_in_required');
@@ -144,7 +147,7 @@ export function buildNativeCommand(config, operation, input={}) {
   }
   if (operation === 'worker' || config.type === 'claude-message') {
     if (!absolute(config.cwd)) return unsupported('absolute_cwd_required');
-    if (!text(config.model, 200) || config.model.startsWith('-') || /\s/.test(config.model)) return unsupported('explicit_model_required');
+    if (!(operation==='worker'&&config.native_default_model===true&&config.model===undefined) && (!text(config.model, 200) || config.model.startsWith('-') || /\s/.test(config.model))) return unsupported('explicit_model_required');
     if (config.permissions !== 'read-only') return unsupported('explicit_read_only_permissions_required');
     if (!bounded(config.max_turns, 6, 20)) return unsupported('invalid_max_turns');
   }
@@ -230,7 +233,7 @@ function nativeResult(type, output) {
       output.split(/\r?\n/).filter(line => line.trim()).map(line => JSON.parse(line));
   } catch { return {reason:'invalid_native_json'}; }
   const ids = new Set();
-  let completed=false, failed=false, invalidId=false;
+  let completed=false, failed=false, invalidId=false,answer;
   for (const record of records) {
     if (!record || typeof record !== 'object' || Array.isArray(record)) return {reason:'invalid_native_json'};
     let id;
@@ -238,12 +241,14 @@ function nativeResult(type, output) {
       if (record.type === 'thread.started') id = record.thread_id;
       if (record.type === 'turn.completed') completed = true;
       if (record.type === 'turn.failed' || record.type === 'error') failed = true;
+      if(record.type==='item.completed'&&record.item?.type==='agent_message'&&typeof record.item.text==='string')answer=record.item.text;
       if (record.type === 'thread.started' && !uuid(id)) invalidId = true;
     } else if (type.startsWith('claude-') && record.type === 'result') {
       id = record.session_id;
       if (!uuid(id)) invalidId = true;
       completed = record.subtype === 'success' && record.is_error === false;
       failed = record.is_error === true || (typeof record.subtype === 'string' && record.subtype.startsWith('error'));
+      if(typeof record.result==='string')answer=record.result;
     }
     if (uuid(id)) ids.add(id);
   }
@@ -251,7 +256,7 @@ function nativeResult(type, output) {
   const identity = ids.size === 1 ? {native_session_id:[...ids][0]} : {};
   if (type === 'copilot-worker') return {reason:'copilot_result_schema_unverified'};
   if (failed) return {...identity, native_status:'failed'};
-  if (completed && ids.size === 1) return {...identity, native_status:'completed'};
+  if (completed && ids.size === 1) return {...identity, native_status:'completed',...(answer!==undefined?{answer}:{})};
   return {...identity, reason:'missing_native_result'};
 }
 
@@ -267,11 +272,19 @@ function workerResult(config, command, result) {
     ...((result.reason || parsed.reason) ? {reason:result.reason || parsed.reason} : {})};
 }
 
-export async function runNativeWorker(config, {prompt, signal, spawnProcess}={}) {
+export async function runNativeWorker(config, {prompt, signal, spawnProcess,inspectPolicy=codexWorkerPolicy}={}) {
   const command = buildNativeCommand(config, 'worker', {prompt});
   if (command.status !== 'ready') return {...command, output:'', stderr:'', truncated:false,
     exited:false, persisted:false, cleanup_supported:false};
-  return workerResult(config, command, await execute(command, {signal, spawnProcess}));
+  if(config.type==='codex-worker'&&config.managed_read_only===true){
+    try{command.args.unshift(...await inspectPolicy(command,{signal,spawnProcess}));}
+    catch(e){return {status:'unsupported',exited:true,persisted:false,reason:e.message,output:'',stderr:'',truncated:false};}
+  }
+  const result=workerResult(config, command, await execute(command, {signal, spawnProcess}));
+  if(config.managed_read_only===true&&result.status==='completed'&&typeof result.answer!=='string'){
+    result.status='uncertain';result.reason='missing_native_answer';
+  }
+  return {...result,requested_model:config.model??'native-default',working_folder:config.cwd,permissions:config.permissions};
 }
 
 export async function notifyNative(config, {recipient, signal, spawnProcess, createWebSocket, readTokenFile}={}) {

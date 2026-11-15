@@ -9,11 +9,25 @@ import {Directory} from '../service/src/directory.mjs';
 import {snapshot} from '../service/src/backup.mjs';
 import {randomBytes} from 'node:crypto';
 import {install} from './install-local.mjs';
-import {main as cli,runWorker} from './ihcp.mjs';
+import {main as cli,runWorker,runRemotePrompt} from './ihcp.mjs';
 import {connect,call,requireNode} from '../service/dist/client.mjs';
 
 const read=file=>JSON.parse(fs.readFileSync(file,'utf8'));
 const write=(file,value)=>fs.writeFileSync(file,JSON.stringify(value)+'\n',{mode:0o600});
+test('remote prompt waits on its own durable worker, preserves constraints, and never converts a named destination into a worker',async()=>{
+ const calls=[],request={session_id:'source',harness:'claude',prompt:'Review',model:'chosen',working_folder:'/work',allow_new_session:true,idempotency_key:'stable'};
+ const invoke=async(_c,name,args)=>{calls.push({name,args});
+  if(name==='session.remote_prompt')return {id:'job',harness:'claude',reply_to:'source',model:'chosen'};
+  if(name==='session.worker_status')return {id:'job',state:'running'};
+  if(name==='session.worker_wait')return {id:'job',state:'completed',result:{answer:'Reviewed'}};
+  if(name==='session.request')return {id:'mail'};
+  assert.fail(name);
+ };
+ const result=await runRemotePrompt(null,request,{invoke});assert.equal(result.result.answer,'Reviewed');assert.equal(result.id,'job');assert.equal(result.reply_to,'source');
+ assert.deepEqual(calls[0].args,request);assert.equal(calls.filter(c=>c.name==='session.remote_prompt').length,1);
+ assert.equal((await runRemotePrompt(null,{session_id:'source',recipient:'existing',body:'hello',idempotency_key:'old'},{invoke})).id,'mail');
+ await assert.rejects(runRemotePrompt(null,{...request,recipient:'existing'},{invoke}),/AMBIGUOUS_REMOTE_DESTINATION/);
+});
 function fixture(t) {
   const dir=fs.mkdtempSync(path.join(tmpdir(),'ihcp-local-'));
   t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));

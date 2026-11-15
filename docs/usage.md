@@ -60,7 +60,7 @@ The skill also supports the lower-level modes below. Each must offer usage assis
 | `register` | Register one harness, with its native discovery adapter, profile and permitted peer harnesses. No individual chat enrolment. |
 | `discover` | List permitted sessions or their advertised models. |
 | `resolve` | Resolve a named target or request a Claude Desktop wake through one existing desktop session. |
-| `remote_prompt` | Send a request to a named harness; the skill resolves the destination session. |
+| `remote_prompt` | Ask an existing chat or run one-off work in a registered harness. |
 | `status` | Inspect a request ID, or inbox counts with `status inbox` (the skill supplies the current source ID). |
 | `update` | Update the shared runtime, skill and MCP connections; `--check` changes nothing. The conversational form needs no path. |
 | `unregister` | Disconnect an explicitly named harness and all its session addresses. |
@@ -114,7 +114,32 @@ Include the actual material to review in the request, or an explicitly accessibl
 
 The skill gets the source session ID from reliable native context and matches it to discovery. If unavailable, it asks the user to identify their source chat; this does not register the chat. Every mail/worker input includes that `session_id`.
 
-The CLI returns a request ID, not an immediate answer. Agents use `status`, `check` and the reply workflow in [onboarding](onboarding.md) to handle the answer automatically. In conversation, show at most a brief “Checking with Codex.” followed by the useful answer; request IDs and delivery states belong in diagnostics, and users should not have to chase replies. Leading `/` is accepted for CLI mode names too, but the conversational `<session> <request>` shorthand is not CLI syntax: the CLI uses private directory and JSON-file paths.
+For an existing destination chat, the CLI returns a request ID, not an immediate answer. Agents use `status`, `check` and the reply workflow in [onboarding](onboarding.md) to handle the answer automatically. In conversation, show at most a brief “Checking with Codex.” followed by the useful answer; request IDs and delivery states belong in diagnostics, and users should not have to chase replies. Leading `/` is accepted for CLI mode names too, but the conversational `<session> <request>` shorthand is not CLI syntax: the CLI uses private directory and JSON-file paths.
+
+## One-off work without an existing chat
+
+> /remote_prompt Claude Review this design in a new one-off session and return the findings here.
+
+The skill supplies the context and starts one worker directly. No matching chat or relay is needed. The same CLI `remote_prompt` command accepts this alternative JSON:
+
+```json
+{
+  "session_id": "<source-native-id>",
+  "harness": "claude",
+  "prompt": "Review the supplied function for concurrency bugs.",
+  "context": "<function and relevant assumptions>",
+  "working_folder": "/projects/example",
+  "permissions": "read-only",
+  "allow_new_session": true,
+  "idempotency_key": "one-off-review-001"
+}
+```
+
+`working_folder` is optional and defaults to the install root. Optional `model` selects exactly that model; otherwise the native default applies. `timeout_ms` defaults to 180,000, with a 300,000 maximum. Omit `recipient`. This route supports Claude/Codex read-only work; write access and other harnesses are unsupported. Missing models, authentication, allowance or native policy support produce failures, not fallback spending or another model.
+
+Unlike mail to an existing chat, this call waits and returns the durable worker result, including `result.answer` on completion. The job ID and source `reply_to` correlate the answer. Native MCP uses `session.remote_prompt` then `session.worker_wait/status` on the same connection. Connection closure cancels owned work. Inspect the original job after interruption; uncertainty is not permission to retry. Reuse the same idempotency key for identical requests.
+
+After preserving the result, use `worker-ack` with `{session_id,id}`. Inspect it using `worker-status` with those fields, or `status` with `{session_id,worker_id}`. Native sessions are nonpersistent; no existing chat is archived. Native logs/account retention may remain. Durable job records follow [automatic retention](retention.md).
 
 ## Receive quietly inside a tool call
 

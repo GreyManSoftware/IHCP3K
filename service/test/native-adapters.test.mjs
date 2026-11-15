@@ -5,6 +5,7 @@ import {buildNativeCommand, notifyNative, runNativeWorker, cleanupNativeWorker,c
 import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {codexWorkerPolicy} from '../src/codex-worker-policy.mjs';
 
 const ID = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
 const OTHER = 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
@@ -36,6 +37,36 @@ function fake({stdout='', stderr='', code=0, signal=null, close=true, run, onKil
   };
   return {spawnProcess, calls};
 }
+
+test('managed workers constrain native integrations and return the actual answer without a relay',async()=>{
+ for(const type of ['codex-worker','claude-worker']){
+  const output=type==='claude-worker'?claudeJson():codexJson()+JSON.stringify({type:'item.completed',item:{type:'agent_message',text:'done'}})+'\n';
+  const f=fake({stdout:output});let inspected=0;
+  const result=await runNativeWorker({...base,type,model:undefined,native_default_model:true,managed_read_only:true,constraint_reviewed:false},{prompt:'Review',spawnProcess:f.spawnProcess,inspectPolicy:async()=>{inspected++;return ['-c','mcp_servers."example".enabled=false'];}});
+  assert.equal(result.status,'completed');assert.equal(result.answer,'done');assert.equal(result.persisted,false);assert.equal(result.requested_model,'native-default');
+  assert.equal(f.calls[0].args.includes('--model'),false);
+  assert.equal(inspected,type==='codex-worker'?1:0);
+  if(type==='codex-worker'){assert.ok(f.calls[0].args.includes('mcp_servers."example".enabled=false'));assert.ok(f.calls[0].args.includes('hooks'));}
+ }
+ const denied=await runNativeWorker({...base,type:'codex-worker',managed_read_only:true},{prompt:'no',inspectPolicy:async()=>{throw Error('worker_policy_unverified');},spawnProcess:()=>assert.fail('model must not start')});
+ assert.equal(denied.status,'unsupported');assert.equal(denied.reason,'worker_policy_unverified');
+});
+
+test('managed Codex policy reads effective cwd configuration and disables every server before model execution',async()=>{
+ for(const config of [{mcp_servers:{alpha:{},'another-name':{}}},{mcp_servers:{}},null,{mcp_servers:{'quoted.name':{}}}]){
+  const f=fake({run:()=>{},onSpawn:({child})=>{
+   child.stdin.write=line=>{const m=JSON.parse(line);queueMicrotask(()=>{
+    if(m.id===1)child.stdout.emit('data',Buffer.from(JSON.stringify({id:1,result:{}})+'\n'));
+    if(m.id===2){assert.equal(m.params.cwd,base.cwd);child.stdout.emit('data',Buffer.from(JSON.stringify({id:2,result:{config}})+'\n'));}
+   });};
+   child.stdin.end=()=>queueMicrotask(()=>child.emit('close',0));
+  }});
+  const promise=codexWorkerPolicy({executable:base.executable,options:{cwd:base.cwd}},{spawnProcess:f.spawnProcess});
+  if(config&&!config.mcp_servers['quoted.name'])assert.equal((await promise).length,Object.keys(config.mcp_servers).length*2);
+  else await assert.rejects(promise,/worker_policy_unverified/);
+  assert.ok(f.calls[0].args.includes('hooks'));assert.ok(!f.calls[0].args.includes('--ignore-rules'));
+ }
+});
 
 test('preflight is disabled by default and rejects missing or permissive local configuration', async () => {
   const worker = {...base, type:'codex-worker'};
@@ -82,7 +113,7 @@ test('command building pins filesystem/tool flags, native model, cwd and disposa
   }
   const command = buildNativeCommand({...base, type:'claude-worker'}, 'worker', {prompt:'test'});
   assert.equal(command.args[command.args.indexOf('--permission-mode')+1], 'dontAsk');
-  assert.equal(command.args[command.args.indexOf('--tools')+1], 'Read');
+  assert.equal(command.args[command.args.indexOf('--tools')+1], 'Read,Glob,Grep');
   assert.equal(command.args[command.args.indexOf('--settings')+1], '{"disableAllHooks":true}');
   assert.ok(command.args.includes('--strict-mcp-config'));
   assert.equal(command.args[command.args.indexOf('--mcp-config')+1], '{"mcpServers":{}}');

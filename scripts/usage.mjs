@@ -6,7 +6,7 @@ export const commands = {
   'register-session': ['<runtime.json|url> <code-file> <profile.json> <new-session-dir>', 'Legacy session enrolment; not needed by harness registration.'],
   discover: ['<harness-dir> [query.json]', 'List connected sessions this identity may contact.'],
   resolve: ['<harness-dir> <target.json>', 'Resolve and wake a named target; use a PTY so an existing Claude desktop chat can be opened automatically when all chats are suspended.'],
-  remote_prompt: ['<harness-dir> <request.json>', 'Send a request to an existing session; return its ID.'],
+  remote_prompt: ['<harness-dir> <request.json>', 'Send to an existing recipient, or run one nonpersistent worker on a registered harness and return its answer. New work JSON: {session_id,harness,prompt,allow_new_session:true,idempotency_key,working_folder?,model?,context?}. Read-only; 180-second default, 300-second maximum timeout_ms.'],
   status: ['<harness-dir> <source-session-or-request.json>', 'Check inbox counts, or one request when an ID file is supplied.'],
   check: ['<harness-dir> <source-session.json>', 'Claim waiting messages for this session to handle.'],
   reply: ['<harness-dir> <reply.json>', 'Reply to a claimed request.'],

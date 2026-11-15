@@ -13,11 +13,17 @@ export class WorkerManager {
  }
  owned(p,id){const row=this.db.prepare('SELECT * FROM workers WHERE id=?').get(id);check(row,'NOT_FOUND');this.store.scope(p,'claim',row.endpoint);check(row.owner===p.id,'FORBIDDEN');return row;}
  start(p,{adapter,prompt,idempotency_key}){
+   const endpoint=this.store.ownEndpoint(p),config=this.configs[adapter];
+   check(config?.allow_endpoints?.includes(endpoint)||(p.harness_hash&&config?.allow_harnesses?.includes(p.harness)),'WORKER_NOT_CONFIGURED');
+   return this.startConfigured(p,{adapter,prompt,idempotency_key},config);
+ }
+ // Internal entry point: the registry constructs this configuration from trusted
+ // harness registration. It is never an RPC parameter or a model-supplied command.
+ startConfigured(p,{adapter,prompt,idempotency_key},config){
    check(!this.stopping,'RUNTIME_STOPPING');
    check(typeof prompt==='string'&&prompt.length>0&&Buffer.byteLength(prompt)<=65536,'INVALID_PROMPT');
    check(typeof idempotency_key==='string'&&idempotency_key.length>0&&idempotency_key.length<=200,'INVALID_KEY');
-   const endpoint=this.store.ownEndpoint(p),config=this.configs[adapter];
-   check(config?.allow_endpoints?.includes(endpoint)||(p.harness_hash&&config?.allow_harnesses?.includes(p.harness)),'WORKER_NOT_CONFIGURED');
+   const endpoint=this.store.ownEndpoint(p);
    check(this.preflight(config,'worker',{prompt}).status==='ready','WORKER_CONFIGURATION_UNSUPPORTED');
    const retention=config.retention??{action:'none',hours:0};
    check(['none','archive','delete'].includes(retention.action)&&Number.isFinite(retention.hours)&&retention.hours>=0&&retention.hours<=8760,'INVALID_RETENTION');

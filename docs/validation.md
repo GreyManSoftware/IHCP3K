@@ -1,5 +1,14 @@
 # Validation
 
+## 1.3.0 one-off remote processing
+
+The release suite passed **160 checks**: 90 service, 16 legacy waiter, 32 CLI/help/resolver/listener/update, 13 legacy import and 9 installer. The official MCP SDK fixture covers the new operation and rejects foreign sources and unsupported permissions. Worker tests cover no target sessions, durable correlation, duplicate prevention, changed-input conflicts, revoked/denied peers, native defaults, read-only arguments, policy-probe failure and actual answer extraction. Existing timeout/cancellation/uncertainty and retention tests remain in place.
+
+A live Windows Codex CLI test through a fresh isolated installation registered the harness, invoked the new CLI/MCP route without a recipient, started one ephemeral worker in the default install folder, returned its exact answer, reused the same durable job on retry and acknowledged the result. A direct native test also passed. Effective native MCP servers were disabled by the worker policy probe; authentication and enforced native rules were retained. All 27 affected native-adapter/installer checks also passed on Windows, and the installed skill passed structural validation.
+
+Claude command/result handling is fixture-tested. No live Claude inference was performed for this release because the account's weekly allowance was exhausted. Live Claude completion, native Linux/macOS execution and other harness adapters are not claimed as validated. One-off write access is deliberately unsupported; existing-session messaging remains separate.
+
+
 ## 1.2.6 automatic suspended-chat wake
 
 All **156 checks passed** across the release suite and affected reruns: 87 service, 16 legacy waiter, 32 CLI/help/resolver/listener/update, 13 legacy import and 8 installer. The initial installer run caught a stale version assertion; it now compares against the package version, and all eight installer checks passed on Linux and Windows. Twenty-nine updater/resolver/help checks passed on Windows; the final wake/help cases also passed on Linux.

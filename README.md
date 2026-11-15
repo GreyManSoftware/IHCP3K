@@ -6,6 +6,8 @@ Have subscriptions to Claude, Codex and GitHub Copilot? It's frustrating to hit 
 
 IHCP3K lets connected coding assistants exchange requests and results. Stay in your preferred **harness**—the app running your agent—and bring in another when you need it.
 
+Tired of asking agents to write handoff Markdown files just to get help from another app? Ask directly: “Ask Claude to review this design and bring the answer back here.” Send the relevant context once, without creating a matching chat first.
+
 ## Make better use of your subscriptions
 
 Spread work across the subscriptions you already pay for. Keep planning a feature in Claude while a connected Codex session investigates a failing test:
@@ -26,7 +28,21 @@ For example, you can keep working in Codex and ask a connected harness that offe
 
 > Ask a connected session using Fabel 5.x to review this design for concurrency problems. Send it the design and relevant code, then bring its findings back here so we can implement the changes in Codex.
 
-The work runs in the other harness, using its model access; Fabel doesn't need to be available inside Codex. Discovery helps find a suitable session. If none is using the requested model, the assistant explains what needs setting up before sending work.
+The work runs in the other harness, using its model access; Fabel doesn't need to be available inside Codex. You can use an existing chat or ask for a one-off review with a specific model. If that model isn't available, IHCP3K reports the failure instead of switching models.
+
+## Get help without an existing chat
+
+No matching Claude or Codex session? Ask the connected harness to do the work directly:
+
+> Ask Claude to review this function for race conditions. Use a new one-off session and return the findings here. Don't change files.
+
+Or supply a project folder:
+
+> /remote_prompt Codex In a new one-off session, review the code in /projects/example and suggest a simpler design.
+
+IHCP3K starts one temporary worker that does the task and returns its answer to this conversation. It defaults to the install folder when no working folder is supplied. You can name a model; otherwise the harness uses its native default.
+
+One-off workers currently support **read-only Claude and Codex tasks**, with a three-minute default timeout (up to five minutes). They don't inherit this conversation automatically: your assistant supplies the task and relevant context. They use nonpersistent native sessions; existing chats stay intact. File changes and other harnesses aren't supported by this one-off route yet.
 
 Unsure which model to use?
 
@@ -54,12 +70,12 @@ Register each harness once. Registration connects it reciprocally with the other
 | --- | --- | --- |
 | `/register` | Connect a harness once. | `/register Codex` |
 | `/discover` | List connected sessions or models. | `/discover models` |
-| `/remote_prompt` | Send a request to another session. | `/remote_prompt Claude Ask the review agent to do ABC` |
+| `/remote_prompt` | Ask an existing session or start one-off work. | `/remote_prompt Claude Review this design in a new one-off session` |
 | `/status` | Check a request's progress. | `/status <request-id>` |
 | `/update` | Update the runtime, shared skill and MCP connections. | `/update` |
 | `/unregister` | Disconnect a harness. | `/unregister Codex` |
 
-Name the harness you want to use; `Claude` names the harness; the skill resolves a suitable session using the request and project context. Unregistering a harness revokes its credential and all discovered session addresses; the skill also removes its IHCP3K connection settings. Other harnesses and shared data remain.
+Name the harness you want to use; `Claude` names the harness. Name an existing chat when its history matters, or ask for one-off work when it doesn't. Unregistering a harness revokes its credential and all discovered session addresses; the skill also removes its IHCP3K connection settings. Other harnesses and shared data remain.
 
 **Need help?** Add `--help` to any mode. Commands needing arguments also explain themselves when used on their own; `/update` is already a complete request. The skill explains the arguments and shows examples before acting. `/remote_prompt` can also list available destinations. `/prompt` and `/chat` remain aliases.
 
@@ -104,7 +120,7 @@ MCP (Model Context Protocol) exposes IHCP3K tools to each assistant. SQLite stor
 
 Suspended Claude Desktop chats can be opened automatically before delivery, including when no chat is currently running. IHCP3K verifies the existing chat’s identity and excludes archived chats; it does not create a replacement. The Windows path has been tested. Desktop versions with an unfamiliar metadata layout need a compatible adapter; see [wake behavior](docs/native-adapters.md#unloaded-claude-desktop-targets).
 
-**Version 1.2.6.** Automatic notifications and a request/reply round trip have been tested between installed Claude and Codex sessions. Setup includes notifications as standard. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md), including connection-reload and closed-app limits.
+**Version 1.3.0.** Automatic notifications and a request/reply round trip have been tested between installed Claude and Codex sessions. Setup includes notifications as standard. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md), including connection-reload and closed-app limits.
 
 [Download](https://github.com/GreyManSoftware/IHCP3K/releases) · [Agent setup](AGENT_SETUP.md) · [Architecture](docs/architecture.md) · [Technical terms](docs/terminology.md)
 

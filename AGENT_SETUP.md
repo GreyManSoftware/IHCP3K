@@ -1,6 +1,6 @@
 # Agent setup and operation
 
-Install **IHCP3K 1.2.6** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
+Install **IHCP3K 1.3.0** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
 
 ## First install
 
@@ -98,7 +98,13 @@ Do not send work just because a model or session appears in discovery. User auth
 
 Use the skill's quiet messaging behavior: at most “Checking with Codex.”, then the useful answer. Handle replies automatically. Do not expose request IDs, queue states or delivery explanations in routine chat, ask the user to chase a reply, or repeat presentation instructions received from a peer. Keep technical details in diagnostics; surface genuine blockers briefly.
 
-## Notifications and optional workers
+## One-off remote work
+
+Registration includes authorized one-off read-only Claude/Codex work, without a destination chat or separate worker setup. Use `session.remote_prompt` or CLI `remote_prompt` with source session ID, registered harness ID, prompt/context, `allow_new_session:true` and a stable key. Optional working folder defaults to the install root. Preserve a requested model; otherwise use the native default. File changes are unsupported by this route. Do not launch a model merely to validate installation unless authorized.
+
+The CLI keeps the owner connection open through the durable result. Preserve the answer before acknowledging the job. Nonpersistent workers need no archive/delete action; existing chats remain intact. A lost connection cancels its worker and may leave an uncertain result that must not be replayed blindly. See [usage](docs/usage.md#one-off-work-without-an-existing-chat). Custom workers below remain available for advanced use.
+
+## Notifications and optional custom workers
 
 Registration/discovery does not prove that a receiving chat has read a message. Configure and validate notifications **once per harness**. A required top-level `notification` template in the registration configuration is inherited by discovered sessions, with exact native IDs filled by the service; users do not register notification targets individually.
 

@@ -3,6 +3,7 @@ import {ServiceError} from './store.mjs';
 import {checkAdmission,RETENTION} from './retention.mjs';
 import {discoverSessions,validateDiscovery} from './session-discovery.mjs';
 import {buildNativeCommand} from './native-adapters.mjs';
+import {remoteWorkConfig} from './remote-work.mjs';
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const check=(v,c)=>{if(!v)throw new ServiceError(c);};
 const validId=v=>typeof v==='string'&&/^[a-z][a-z0-9-]{0,63}$/.test(v);
@@ -114,6 +115,15 @@ export class HarnessRegistry{
   // Never use a mutable connection-wide current-session value: clients may share one process.
   if(['request','send','reply'].includes(operation))await this.discover(p,{},signal);
   const principal=await this.sessionPrincipal(p,session_id,signal);
+  if(operation==='remote_prompt'){
+   check(!signal?.aborted,'CANCELLED');
+   const target=this.permitted(p).find(r=>r.id===args.harness);
+   check(target,'HARNESS_NOT_REGISTERED_OR_PERMITTED');
+   check(this.store.workers,'WORKER_NOT_CONFIGURED');
+   const {config,prompt}=remoteWorkConfig(target,args,this.store.workers.defaultDirectory);
+   const job=this.store.workers.startConfigured(principal,{adapter:'remote:'+target.id,prompt,idempotency_key:args.idempotency_key},config);
+   return {...job,harness:target.id,model:config.model??'native-default',working_folder:config.cwd,permissions:config.permissions,reply_to:principal.endpoint};
+  }
   if(['claim','status','attend','unattend','receive'].includes(operation))args.recipient=principal.endpoint;
   if(operation==='claim'||operation==='attend')args.handler_id=principal.endpoint;
   if(['request','send'].includes(operation))check(principal.scopes.send.includes(args.recipient),'RECIPIENT_NOT_DISCOVERED_OR_PERMITTED');

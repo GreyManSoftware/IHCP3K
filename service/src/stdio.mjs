@@ -28,6 +28,7 @@ export async function startStdio(runtimeFile,tokenFile){
  const authenticate=()=>config.principals.find(p=>eq(p.token,secret))??store.directory.authenticate(secret)??store.harnesses.authenticate(secret);
  const principal=authenticate();if(!principal){store.close();throw Error('UNAUTHORIZED');}
  store.workers=new WorkerManager(store,runtime.workers??{});
+ store.workers.defaultDirectory=path.dirname(runtime.private_dir??path.dirname(runtimeFile));
  const notifications=new Notifications(store,Object.fromEntries(Object.entries(runtime.notifications??{}).map(([endpoint,adapter])=>[endpoint,{...adapter,cwd:workingDirectory}])));
  store.notifications=notifications;
  const abort=new AbortController();

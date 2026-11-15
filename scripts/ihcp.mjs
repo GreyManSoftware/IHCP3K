@@ -40,6 +40,18 @@ export async function runWorker(client,{timeout_ms=330000,...request},{invoke=ca
  // Persist the returned result before explicitly using worker-ack. No autoack.
  return result;
 }
+export async function runRemotePrompt(client,{session_id,...request},{invoke=call}={}){
+ if(request.recipient!==undefined){
+   if(request.harness!==undefined||request.allow_new_session!==undefined)throw Error('AMBIGUOUS_REMOTE_DESTINATION');
+   return invoke(client,'session.request',{session_id,...request});
+ }
+ const started=await invoke(client,'session.remote_prompt',{session_id,...request});
+ let result=await invoke(client,'session.worker_status',{session_id,id:started.id});
+ // Keep the owner connection open through the result. No background relay or
+ // notification is required for this single native worker.
+ while(result.state==='running')result=await invoke(client,'session.worker_wait',{session_id,id:started.id,timeout_ms:25000});
+ return {...result,harness:started.harness,reply_to:started.reply_to,model:started.model,working_folder:started.working_folder,permissions:started.permissions};
+}
 export async function main(args=process.argv.slice(2)){
  const parsed=parseInvocation(args);
  if(parsed.help)return parsed;
@@ -117,6 +129,8 @@ export async function main(args=process.argv.slice(2)){
        finally{process.off('SIGINT',cancel);process.off('SIGTERM',cancel);}
      }
      if(mode==='unlink'){const result=await call(c,'harness.unregister',{});write(harnessFile,{...harness,linked:false});return result;}
+     if(mode==='remote_prompt')return runRemotePrompt(c,read(input));
+     if(mode==='status'&&input){const payload=read(input);if(payload.worker_id)return call(c,'session.worker_status',{session_id:payload.session_id,id:payload.worker_id});}
      if(['worker','worker-status','worker-ack'].includes(mode)){
        if(!input)return parseInvocation([mode,'--help']);
        const {session_id,...payload}=read(input);

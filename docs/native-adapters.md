@@ -1,8 +1,16 @@
 # Native adapters and retention
 
+## One-off harness workers
+
+`session.remote_prompt` derives trusted settings from reciprocal harness registration; callers cannot supply executables or native arguments. Claude runs `-p` with Read/Glob/Grep, strict empty MCP configuration, disabled hooks/skills and no session persistence. Codex runs `exec --sandbox read-only --ephemeral` after inspecting effective configuration for the working folder and disabling every MCP server, hooks, plugins, apps and delegation. Authentication and enforced rules stay native; no global settings, trust grants or credentials are copied. Unknown interfaces or MCP names that cannot be safely expressed as native override paths fail closed. This policy probe does not invoke a model.
+
+Explicit model choices are preserved; omitted models use the native default. The adapter returns the actual Claude result/Codex final agent message. Timeout, incomplete output or unverified termination remains uncertain. Write permissions and paid/model fallback are unsupported. Nonpersistent does not promise zero logs or remote retention. Custom `runtime.workers` entries retain their operator-review requirements.
+
+Native references: [Codex configuration](https://developers.openai.com/codex/config-reference/) and [Claude CLI](https://code.claude.com/docs/en/cli-reference). Installed behavior is validated separately in the release report.
+
 An **adapter** connects IHCP3K to an app's own commands. A **notification adapter** tells an existing session that a message is waiting. A **task worker** starts a separate, time-limited session to do explicitly requested work. **Retention** controls how long a worker's chat history is kept. An **endpoint revision** is a registration version used to reject outdated target mappings. See [terminology](terminology.md) for configuration terms.
 
-**v1.2.6; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
+**v1.3.0; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
 
 A request to an existing session and a new worker are different operations. `remote_prompt` sends durable mail; the configured adapter notifies the existing target. `worker` explicitly creates a separately owned session to do a bounded task. Delivery failure must not silently substitute a worker or resumed session.
 

@@ -6,6 +6,7 @@ import {WorkerManager} from '../src/worker-manager.mjs';
 import {SharedStore} from '../src/shared-store.mjs';
 import {createToolServer} from '../src/server.mjs';
 import {sessionAddress} from '../src/harness-registry.mjs';
+import {tmpdir} from 'node:os';
 const profile={label:'Test',source:'fixture',observed_at:new Date().toISOString(),fresh_for_s:600,models:[],usage:[],wake:{type:'manual',lifetime:'test',closed_app:'unknown',human_fallback:'check'}};
 test('one harness MCP configuration serves separate sessions; revocation applies to an already connected client',async t=>{
  const store=new SharedStore(':memory:',{recipients:['bootstrap']});t.after(()=>store.close());
@@ -19,6 +20,11 @@ test('one harness MCP configuration serves separate sessions; revocation applies
   t.after(async()=>{await client.close();await server.close();});
  }
  const [a,b]=clients,call=async(c,name,args={})=>{const result=await c.callTool({name,arguments:args});assert.equal(result.isError,undefined,JSON.stringify(result));return result.structuredContent;};
+ store.workers.defaultDirectory=tmpdir();
+ const remote=await call(a,'session.remote_prompt',{session_id:'alpha-1',harness:'beta',prompt:'one-off review',allow_new_session:true,idempotency_key:'new-remote'});
+ assert.equal(remote.reply_to,sessionAddress('alpha','alpha-1'));
+ assert.equal((await call(a,'session.worker_wait',{session_id:'alpha-1',id:remote.id,timeout_ms:1000})).state,'completed');
+ for(const change of [{allow_new_session:false},{permissions:'workspace-write'}])assert.equal((await a.callTool({name:'session.remote_prompt',arguments:{session_id:'alpha-1',harness:'beta',prompt:'no',allow_new_session:true,idempotency_key:'denied',...change}})).isError,true);
  const names=(await a.listTools()).tools.map(x=>x.name);assert.ok(names.includes('harness.discover'));assert.ok(names.includes('session.request'));assert.ok(!names.includes('harness.register'));assert.ok(!names.includes('mail.claim'));
  assert.equal((await call(a,'harness.discover')).harnesses.length,2);
  const health=await call(a,'harness.health');assert.equal(health.version,a.getServerVersion().version);assert.equal(health.schema_version,6);assert.equal(health.instance_id,store.instanceId);
