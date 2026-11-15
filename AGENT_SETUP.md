@@ -9,7 +9,7 @@ Ask exactly one setup question: **“Where do you want to install it?”** If th
 The agent handles the rest:
 
 1. Record that folder as `<install-root>`. Store the extracted release under `app/`, private runtime data under `data/`, and harness credentials under `data/harnesses/<harness-id>/`. Create needed parent folders; let the installer create and protect `data/`. Keep private data out of Git and shared/public folders.
-2. Download `IHCP3K-1.2.1.zip` and its `.sha256` file from [the release](https://github.com/GreyManSoftware/IHCP3K/releases/tag/v1.2.1), verify the hash and extract the package contents into `app/`. Use the included guide and [skill](skills/harness-interop/SKILL.md).
+2. Inspect the destination before downloading. Compare its recorded release version with the [latest published stable release](https://github.com/GreyManSoftware/IHCP3K/releases/latest), using semantic version ordering, not dates or the version on an unreleased branch. Reuse a complete, verified local package when it is the same version or newer. If only the ZIP is present, verify its `.sha256` and extract it; do not download it again. Download a release ZIP and its `.sha256` only when a newer stable release exists or the local package is missing, incomplete or fails integrity checks. Verify before extraction. Never downgrade, overwrite local modifications or replace a running installation in place. For an existing runtime, follow its compatible reuse or offline update path and preserve `data/`, credentials and registrations. If the release check is unavailable, report that freshness is unknown and reuse a verified compatible local package. Keep following this setup checklist; an older packaged guide must not reintroduce extra setup questions or destructive tests.
 3. Use existing Node 24.15+ (SQLite 3.51.3+). Respect the user's software-installation policy if it is missing. The prebuilt package needs no npm install or Docker at runtime.
 4. Run the following from `app/`, replacing the placeholder with the selected absolute path. The helper working directory defaults to `data/`; no separate question or `--workdir` is needed.
 
@@ -104,11 +104,19 @@ Codex registration defaults to `{"enabled":true,"type":"codex-queue"}`. Claude r
 
 Explicit task workers remain optional. Configure trusted executable/model/limits and `allow_harnesses:["codex"]` for harness-wide permission, or a narrower `allow_endpoints` list. Use the `session.worker_*` tools or CLI `worker` with `session_id` in its input. The owning connection must remain open; shutdown cancels owned workers. Review and acknowledge successful results before configured cleanup. Native cleanup is currently implemented only for opted-in persisted Codex workers, with verified exit and exact identity. No guarantees of zero logs or secure erasure.
 
-## Unregister and test
+## Verify normal setup
+
+Check the saved native MCP configuration, tool loading, harness registration and discovery of existing sessions. When a peer is available, exchange one harmless correlated request/reply and verify automatic notification and receipt. Reuse successful checks already performed during this installation. If a second harness has not joined yet, report cross-harness validation as pending until it does.
+
+If the current chat needs a native reload to expose its MCP tools, state that once and use the supported reload path; do not restart the user's application silently. A working bundled-client exchange proves messaging, not native tool loading. Report that distinction briefly without turning installation into a test questionnaire.
+
+**Normal installation must not unregister a harness, rotate credentials, disconnect peers, create disposable chats, or ask the user to run those tests.** New-session discovery, wrong-source rejection, unregister isolation and re-registration belong in automated or explicitly requested isolated release tests. They are not acceptance gates for a user's fresh installation. Leave the working installation connected.
+
+## Unregister when requested
 
 `/unregister <harness>` invokes `harness.unregister`: it revokes the harness credential and every discovered session address atomically, without deleting shared messages or other harnesses. The agent then removes only that harness's recorded IHCP3K native settings using its supported settings mechanism. Resolve active work and stop only verified owned helpers; report any incomplete settings removal. Relinking restores the stable session addresses: retained pending mail becomes available again, while uncertain claims remain for review. Inspect retained work before re-enabling notifications or handling requests.
 
-Before calling setup complete, test: register once; discover multiple sessions; create another native session and discover it without registering again; exchange a harmless correlated request/reply between two sessions; confirm replies cannot be claimed using another source session; unregister one harness and confirm the other still works. Native configuration, notifications and full app behavior require their own observations. See [validation](docs/validation.md).
+Run this workflow only when the user requests disconnection or an explicit isolated lifecycle test, never as an installation check. See [validation](docs/validation.md) for release-test evidence.
 
 ## Shared knowledge and unknown harnesses
 

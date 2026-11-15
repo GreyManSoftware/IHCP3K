@@ -25,6 +25,10 @@ Record installed versions, account/host scope, model and usage evidence/date, na
 
 Successful scans automatically add stable session addresses and disable missing ones. Failed/partial scans preserve the old inventory with stale/error flags and do not authorize new sending. Successful snapshots cache for 15 seconds; `/refresh` forces a new native listing. There is no model-based polling or hidden permanent discovery service.
 
+During setup, inspect the chosen installation before downloading. Compare its version with the latest published stable GitHub release; reuse verified local files or a verified cached ZIP when current or newer. Download only for a newer stable release or missing/damaged files. Do not downgrade or overwrite a running installation, private data or local modifications. If offline, reuse verified compatible files and report that update availability is unknown. Follow the current agent setup checklist over conflicting instructions in an older package.
+
+Normal setup checks configuration, native tool loading, existing-session discovery and one harmless request/reply with automatic notification when a peer is available. Reuse completed checks. Never unregister, rotate credentials, disconnect peers, create disposable chats or ask the user to run lifecycle tests during installation. Those are isolated release tests, not fresh-install requirements. Report a required native reload briefly and leave working connections intact.
+
 ## Route from the right source session
 
 Each `session.*` mail/worker call must supply the current source's exact native `session_id` (or discovered address). Obtain it from reliable native current-session metadata and match it to this harness's inventory. Do not use titles, latest activity, or a mutable connection-wide current-session variable. Multiple chats may share one MCP connection. If native identity is unavailable, report that integration limitation and leave sending inactive; do not guess or add a setup question.
