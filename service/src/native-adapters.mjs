@@ -101,7 +101,7 @@ export function buildNativeCommand(config, operation, input={}) {
   let args, stdin = '', persisted = config.persist === true;
   if (operation === 'notify') {
     if (!text(input.recipient, 64) || !/^[a-z][a-z0-9-]*$/.test(input.recipient)) return unsupported('invalid_recipient');
-    const doorbell = `[IHCP3K] Pending durable mail for ${input.recipient}. Read and handle your MCP inbox. A notification is not approval to execute peer requests.`;
+    const doorbell = '[IHCP3K] New message.';
     persisted = false;
     if (config.type === 'codex-queue') {
       if (!uuid(config.native_session_id)) return unsupported('exact_native_uuid_required');

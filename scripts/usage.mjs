@@ -19,10 +19,13 @@ export const commands = {
   worker: ['<harness-dir> <worker.json>', 'Run an explicitly configured task worker and wait within its limits.'],
   'worker-status': ['<harness-dir> <worker-id.json>', 'Inspect a worker result and state.'],
   'worker-ack': ['<harness-dir> <worker-id.json>', 'Acknowledge a worker result after inspecting it.'],
-  exchange: ['<legacy-session-dir> <message.json>', 'Legacy send-and-wait operation; returned mail may be unrelated.']
+  exchange: ['<harness-dir> <request.json>', 'Send a correlated request and receive mail inside this tool call; match in_reply_to. Legacy endpoints retain ordinary send semantics.'],
+  wait: ['<harness-dir> <source-session.json>', 'Receive and claim mail in a bounded tool call without sending again.'],
+  listen: ['<harness-dir> <listener.json>', 'Target-owned native background task: wait without claiming, then exit on pending mail.'],
+  unattend: ['<harness-dir> <attendance.json>', 'Release this session\'s listener lease using its returned token.']
 };
 export const aliases = {prompt:'remote_prompt',chat:'remote_prompt',request:'remote_prompt',unlink:'unregister'};
-const minimumArgs = {enroll:3,register:3,'register-session':4,remote_prompt:2,resolve:2,reply:2,send:2,complete:2,renew:2,release:2,inspect:2,worker:2,'worker-status':2,'worker-ack':2,exchange:2};
+const minimumArgs = {enroll:3,register:3,'register-session':4,remote_prompt:2,resolve:2,reply:2,send:2,complete:2,renew:2,release:2,inspect:2,worker:2,'worker-status':2,'worker-ack':2,exchange:2,wait:2,listen:2,unattend:2};
 export function parseInvocation(args) {
   const raw=args[0]?.replace(/^\//,'');
   const globalHelp=!raw||['help','--help','-h','?'].includes(raw);

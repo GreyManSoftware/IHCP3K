@@ -2,7 +2,7 @@
 
 An **adapter** connects IHCP3K to an app's own commands. A **notification adapter** tells an existing session that a message is waiting. A **task worker** starts a separate, time-limited session to do explicitly requested work. **Retention** controls how long a worker's chat history is kept. An **endpoint revision** is a registration version used to reject outdated target mappings. See [terminology](terminology.md) for configuration terms.
 
-**v1.2.2; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
+**v1.2.3; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
 
 A request to an existing session and a new worker are different operations. `remote_prompt` sends durable mail; the configured adapter notifies the existing target. `worker` explicitly creates a separately owned session to do a bounded task. Delivery failure must not silently substitute a worker or resumed session.
 
@@ -13,6 +13,16 @@ Version 1.1 registers a harness once. Codex's read-only [`thread/list`](https://
 A required `notification` template in the private harness registration is inherited by discovered sessions. The runtime fills the exact native ID and current session revision. Codex templates use `codex-queue`; Claude templates use `claude-message` only after validating support for the discovery listing's exact IDs. A previous test with a different short reference does not establish that support. Unsupported targets leave messages pending, rather than prompting per-session registration or silently starting another chat.
 
 The explicit `runtime.notifications` maps below remain available for legacy/manual adapter configuration. They are not required for registering every newly discovered session. Worker configuration may allow an entire registered harness with `allow_harnesses`, with source-specific results still isolated by the explicit session identity.
+
+## Quiet delivery and native UI limits
+
+`session.exchange` and `session.wait` hold a real MCP call open and return received mail in its result. SQLite attendance suppresses new native notifications for that inbox while the call waits. The host decides how its tool results render or collapse; IHCP3K never injects fake tool-history entries.
+
+For a Claude session with native background Bash tasks, the target can run `ihcp.mjs listen` as its own task. The non-AI wrapper renews attendance over bounded waits and exits on pending mail. The native task-completion event wakes that existing owner, which claims the inbox and handles it. It does not create a relay chat, require another registration, or install an OS service. A detached process launched elsewhere cannot supply a target-owned completion event. See the skill for re-arming and cleanup.
+
+Codex's inspected `queue` / `thread/queue/add` interfaces have no hidden-user-message option. Idle fallback remains the brief `[IHCP3K] New message.`. The app-server's per-client notification filtering does not hide user turns in the desktop, and raw history injection is not a supported substitute for a wake or an actual tool result. See the [app-server interface](https://learn.chatgpt.com/docs/app-server). Already queued notifications cannot be recalled.
+
+A listener holds at most a 120-second renewable lease, shortened to 15 seconds when it reports mail. Expiry restores ordinary notification eligibility if the owner fails to claim. Outstanding queued/uncertain notifications remain subject to normal reconciliation. Stop a listener before another wait/exchange in that inbox; overlapping receivers fail with `INBOX_ATTENDED`. Native permission prompts remain unchanged.
 
 ## Trusted configuration
 

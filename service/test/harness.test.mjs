@@ -16,6 +16,42 @@ function fixture(t){
  const register=(id,peers=undefined,credential=(id==='alpha'?'a':'b').repeat(43))=>r.register(admin,{harness:id,credential,discovery:{type:'codex',executable:'/native/codex',cwd:'/'+id},profile,peers});
  register('alpha');register('beta');return {store,r,inventory,register,a:r.authenticate('a'.repeat(43)),b:r.authenticate('b'.repeat(43))};
 }
+
+test('quiet listener owns a renewable lease, never claims, and restores notification fallback',async t=>{
+ const {store,r,a,b}=fixture(t);await r.discover(a);
+ const recipient=sessionAddress('alpha','a1');let now=Date.now();store.now=()=>now;
+ const first=await r.invoke(a,'listen',{session_id:'a1',timeout_ms:0});assert.equal(first.status,'timeout');
+ await assert.rejects(r.invoke(a,'wait',{session_id:'a1',timeout_ms:0}),/INBOX_ATTENDED/);
+ await assert.rejects(r.invoke(a,'unattend',{session_id:'a2',attendance_token:first.attendance_token}),/STALE_ATTENDANCE/);
+ now+=1000;
+ const renewed=await r.invoke(a,'listen',{session_id:'a1',attendance_token:first.attendance_token,timeout_ms:0});
+ assert.equal(renewed.attendance_token,first.attendance_token);assert.equal(store.attendance(recipient).deadline,now+120000);
+ await r.invoke(b,'send',{session_id:'b1',recipient,body:'pending',idempotency_key:'listen'});
+ const p=await r.sessionPrincipal(a,'a1');assert.equal(store.reserveWake(p,{recipient}).reserved,false);
+ const ready=await r.invoke(a,'listen',{session_id:'a1',attendance_token:first.attendance_token,timeout_ms:0});
+ assert.equal(ready.status,'pending');assert.equal(ready.pending_count,1);assert.equal(store.pending(recipient),1);
+ assert.equal(store.attendance(recipient).deadline,now+15000);
+ now+=15001;assert.equal(store.reserveWake(p,{recipient}).reserved,true);
+});
+
+test('quiet waits release attendance after cancellation, pause, invalid requests and revocation',async t=>{
+ const {store,r,a}=fixture(t);await r.discover(a);const recipient=sessionAddress('alpha','a1');
+ await assert.rejects(r.invoke(a,'exchange',{session_id:'a1',recipient:sessionAddress('beta','b1'),body:'x'.repeat(65537),idempotency_key:'invalid',timeout_ms:0}));
+ assert.equal(store.attendance(recipient),undefined);
+ for(const action of ['cancel','pause','revoke']){
+  const abort=new AbortController();
+  // Inject the event at the actual waiting boundary, without timing sleeps.
+  store.changedWithin=async()=>{
+   if(action==='cancel')abort.abort();
+   if(action==='pause')store.db.prepare('INSERT INTO pauses(recipient,pause_id,created_at) VALUES(?,?,?)').run(recipient,'test',store.now());
+   if(action==='revoke')r.unregister(a);
+  };
+  const result=r.invoke(a,'wait',{session_id:'a1',timeout_ms:1000},abort.signal);
+  if(action==='revoke')await assert.rejects(result);else assert.equal((await result).status,action==='cancel'?'cancelled':'paused');
+  assert.equal(store.attendance(recipient),undefined);
+  if(action==='pause')store.db.prepare('DELETE FROM pauses WHERE recipient=?').run(recipient);
+ }
+});
 test('one harness grant discovers existing and later sessions; stable IDs survive refresh and absent sessions are disabled',async t=>{
  const {store,r,inventory,register,a}=fixture(t);
  assert.equal(register('alpha').reused,true);

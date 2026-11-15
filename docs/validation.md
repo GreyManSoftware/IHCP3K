@@ -1,5 +1,14 @@
 # Validation
 
+## 1.2.3 quiet delivery
+
+The full pinned-container suite passed **135 tests** (87 service, 16 legacy waiter, 11 CLI/help/resolver/listener, 13 legacy import, 8 installer). Extended SDK and registry tests cover real tool-result replies, source isolation, attendance before send, bounded waits, listener renewal without claiming, pending grace, expiry fallback, pause/cancellation/revocation, invalid-request cleanup and the short native notification. The listener wrapper tests exercise internal renewal and cleanup without model calls. All eight packaged installer tests also passed on Windows, and the skill validator passed.
+
+A live Windows Claude–Codex test used the deployed 1.2.3 runtime. The existing Claude session started the listener through its own native background Bash task. The next request returned `receiver_attending` instead of dispatching a user-message notification. Claude reported a native system task-completion event with exit code 0, claimed the request and returned the correlated proof. Its reply arrived in the caller's waiting MCP result with no extra Codex notification. Both test replies were completed and the bounded listener exited without re-arming. No replacement chats or desktop capture were used.
+
+The Codex test used the bundled SDK client inside a shell tool because the existing native MCP connection was closed during upgrade. A supported app-server reload attempt could not reach the local control socket (Windows error 10050). Fresh SDK connections expose all four new tools; this does **not** prove that already-open Codex tool catalogues refreshed. Those need a successful native reconnect. Tool expansion/collapse remains host-controlled. Idle Codex queue delivery is still a brief visible notification; there is no verified hidden idle wake API.
+
+
 ## 1.2.2 target resolution and setup checks
 
 The full pinned-container suite passed: **131 tests** (85 service, 16 legacy waiter, 9 queue/help/resolver, 13 legacy import, 8 installer). The six resolver tests cover direct delivery, one verified desktop relay, stale/ambiguous/unsupported discovery, identity changes after wake, retry suppression, malformed input and bounded native registration metadata. Existing help tests also cover the new command. The Windows installer checks passed separately before this change; the final full installer run was in Linux containers.

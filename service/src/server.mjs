@@ -60,6 +60,10 @@ const harnessSchemas={
  'harness.discover':{force:z.boolean().default(false)},
  'harness.unregister':{},
  'session.request':{session_id:z.string().min(1).max(256),...schemas['mail.request']},
+ 'session.exchange':{session_id:z.string().min(1).max(256),...schemas['mail.request'],timeout_ms:z.number().int().min(0).max(25000).default(25000)},
+ 'session.wait':{session_id:z.string().min(1).max(256),timeout_ms:z.number().int().min(0).max(25000).default(25000)},
+ 'session.listen':{session_id:z.string().min(1).max(256),attendance_token:z.string().uuid().optional(),timeout_ms:z.number().int().min(0).max(25000).default(25000)},
+ 'session.unattend':{session_id:z.string().min(1).max(256),attendance_token:z.string().uuid()},
  'session.send':{session_id:z.string().min(1).max(256),...schemas['mail.send']},
  'session.reply':{session_id:z.string().min(1).max(256),...schemas['mail.reply']},
  'session.request_status':{session_id:z.string().min(1).max(256),...schemas['mail.request_status']},
@@ -78,7 +82,7 @@ function equal(a,b) { const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length
 function reject(res,code,error) { res.writeHead(code,{'Content-Type':'application/json'});res.end(JSON.stringify({error})); }
 
 export function createToolServer(store,directory,principal,abort=new AbortController(),resolvePrincipal=()=>principal){
-    const server=new McpServer({name:'ihcp3k',version:'1.2.2'});
+    const server=new McpServer({name:'ihcp3k',version:'1.2.3'});
     if(store.harnesses)for(const [name,inputSchema] of Object.entries(harnessSchemas)){
       if(name.startsWith('session.worker_')&&!store.workers)continue;
       const permitted=name==='harness.register'?principal.permissions.includes('registry'):principal.permissions.includes('harness');

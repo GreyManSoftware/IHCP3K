@@ -30,6 +30,24 @@ test('one harness MCP configuration serves separate sessions; revocation applies
  await call(b,'session.reply',{session_id:'beta-2',id:got.id,claim_token:got.claim_token,generation:got.generation,body:'answer',idempotency_key:'answer'});
  assert.equal((await call(a,'session.claim',{session_id:'alpha-2'})).messages.length,0);
  assert.equal((await call(a,'session.claim',{session_id:'alpha-1'})).messages[0].in_reply_to,req.id);
+ // Real SDK tool response carries the answer; the reply cannot reserve a native wake.
+ for(const name of ['session.exchange','session.wait','session.listen','session.unattend'])assert.ok(names.includes(name));
+ const source=sessionAddress('alpha','alpha-1'),target=sessionAddress('beta','beta-2');
+ store.notifications={dispatch:async recipient=>{
+   if(recipient===source){assert.ok(store.attendance(source));return {status:'receiver_attending'};}
+   assert.equal(recipient,target);assert.ok(store.attendance(source));
+   const message=(await call(b,'session.claim',{session_id:'beta-2'})).messages[0];
+   await call(b,'session.reply',{session_id:'beta-2',id:message.id,claim_token:message.claim_token,generation:message.generation,body:'tool answer',idempotency_key:'quiet-answer'});
+   return {status:'queued'};
+ }};
+ const quiet=await call(a,'session.exchange',{session_id:'alpha-1',recipient:target,body:'quiet question',idempotency_key:'quiet',timeout_ms:0});
+ assert.equal(quiet.status,'messages');assert.equal(quiet.messages[0].body,'tool answer');assert.equal(quiet.messages[0].in_reply_to,quiet.request_id);
+ assert.equal(store.attendance(source),undefined);
+ await call(a,'session.complete',{session_id:'alpha-1',...Object.fromEntries(['id','generation','claim_token'].map(k=>[k,quiet.messages[0][k]])),outcome:'read'});
+ assert.equal((await call(a,'session.wait',{session_id:'alpha-1',timeout_ms:0})).status,'timeout');
+ assert.equal(store.attendance(source),undefined);
+ const foreign=await a.callTool({name:'session.wait',arguments:{session_id:'beta-2',timeout_ms:0}});assert.equal(foreign.isError,true);
+ store.notifications=undefined;
  assert.equal((await call(b,'harness.unregister')).sessions_revoked,2);
  const denied=await b.callTool({name:'harness.discover',arguments:{}});assert.equal(denied.isError,true);assert.match(denied.content[0].text,/REVOKED/);
  assert.equal((await call(a,'harness.discover')).harnesses.length,1);

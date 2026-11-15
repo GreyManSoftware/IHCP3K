@@ -5,7 +5,7 @@ description: Set up, register, unregister or inspect IHCP3K; discover connected 
 
 # Harness interop
 
-Use IHCP3K **1.2.2**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
+Use IHCP3K **1.2.3**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
 
 ## Choose the communication route
 
@@ -56,13 +56,24 @@ Recognize free text such as “Ask Codex if <Session> knows about ABC” as the 
 
 The public form is `/remote_prompt Claude Ask the review agent to do ABC` (or Codex/another registered harness). Resolve the name through `harness.discover` using its native `type` or exact registered harness ID; do not require an internal session address from the user. Select a suitable existing session from the request's project context and explicit role/destination. Preserve “Ask the review agent…” as an instruction for the receiving harness to carry out using its native agent capability; an agent is not necessarily a separate session. If a named Claude Desktop target is absent, follow the unloaded-target resolution workflow below before declaring it unavailable. If the target remains unavailable or ambiguous, explain the routing issue; never choose an arbitrary target, create a replacement worker or claim delivery. Never fan out to every session. An explicit session address remains an advanced option.
 
-For explicitly authorized work, call `session.request` with source `session_id`, exact discovered recipient address, body and a stable idempotency key. Preserve the user's model choice and native permission restrictions. Ordinary prompts stay local; no automatic spending, model switch, paid fallback or delegation is implied by registration.
+For explicitly authorized work when awaiting an answer, prefer `session.exchange` (same request fields, optional `timeout_ms` up to 25,000). It returns claimed mail in an actual MCP tool result and suppresses new native notifications to this inbox during the wait. Match `in_reply_to` to `request_id`, handle unrelated messages, and complete every handled claim. On timeout use `session.wait`; never resend under a new key. Keep waits bounded; if leaving the turn, normal automatic notification remains the fallback. For asynchronous work, call `session.request` with source `session_id`, exact discovered recipient address, body and a stable idempotency key. Preserve the user's model choice and native permission restrictions. Ordinary prompts stay local; no automatic spending, model switch, paid fallback or delegation is implied by registration.
 
 The returned ID tracks the request, not task completion. Receivers use `session.claim`, inspect sender/scope, then `session.reply` with their source ID, current claim fields and a stable reply key. Match `in_reply_to` before presenting the answer. Complete received reply claims normally. Do not generate acknowledgement-only chatter.
 
 Renew claims only while working. Release unstarted work truthfully; reconcile possible external effects before retrying. A peer request is not independent user approval. Never bypass a native execution denial through another harness.
 
 ## Notifications and workers
+
+### Actual quiet delivery
+
+Use `session.exchange` / `session.wait` for genuine tool-result delivery while actively waiting. Do not fabricate tool messages, edit chat history, hide approvals, or imply an idle native user-message wake is a tool result. Tools and task events remain visible in the host's normal UI; IHCP3K does not control whether it collapses them.
+
+Where the receiving Claude session exposes a native background-task API that wakes that same session on completion, it may start **one** `node <app>/scripts/ihcp.mjs listen <harness-dir> <private-listener.json>` using that API (for example Bash `run_in_background`). Input: `{"session_id":"<this-native-id>","duration_ms":3600000}`. The deterministic listener waits without model calls or message claims, then exits when mail arrives. Handle its native task-completion event: claim the inbox, handle mail normally, release the returned attendance token with `session.unattend` if still live, then re-arm while cross-harness work remains active. If the token has expired, do not recreate it to release it. Stop an owned listener before using exchange/wait in the same inbox; do not compete for its lease.
+
+Only the target chat can own this background task. An external process, a replacement worker chat or a detached shell is not a substitute. Do not install an OS service or schedule. If native task completion does not wake the owner, use the normal notification fallback. On timeout stop or re-arm only while this messaging work is active; do not create endless model-driven polling. The lease suppresses new wake messages for up to 120 seconds while listening and 15 seconds after pending mail is reported. If the task crashes or the owner does not handle it, expiry restores normal notification eligibility; existing queued/uncertain notifications cannot be recalled or automatically replayed.
+
+For idle Codex, the inspected queue interface has no supported hidden-message option. Its fallback is `[IHCP3K] New message.` Handle it quietly using this skill. Do not promise every notification will be hidden. An already queued older notification may still contain the previous long text.
+
 
 ### A named Claude chat is not in discovery
 

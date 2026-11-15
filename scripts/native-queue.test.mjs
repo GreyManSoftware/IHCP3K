@@ -8,6 +8,7 @@ test('queue evidence rejects silent success, warned failure, crashes and timed-o
   for(const [stdout,stderr,code,expected] of [[queued,'',0,'queued'],['','',0,'uncertain'],[queued,'error: failed resume',0,'uncertain'],[queued,'',1,'uncertain'],['not queued','',0,'uncertain'],[queued.replace(thread,'cccccccc-cccc-4ccc-cccc-cccccccccccc'),'',0,'uncertain']]){
     const spawnProcess=(_cli,args,options)=>{
       assert.equal(args.includes('--resume'),false);assert.equal(options.windowsHide,true);
+      assert.equal(args[args.indexOf('--message')+1],'[IHCP3K] New message.');
       const child=new EventEmitter();child.stdout=new EventEmitter();child.stderr=new EventEmitter();child.kill=()=>{};
       queueMicrotask(()=>{child.stdout.emit('data',stdout);child.stderr.emit('data',stderr);child.emit('exit',code);});return child;
     };

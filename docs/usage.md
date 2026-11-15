@@ -76,7 +76,10 @@ The skill also supports the lower-level modes below. Each must offer usage assis
 | `enroll` | Legacy administrator: issue a per-session grant; not used for harness registration. |
 | `inspect` | Legacy administrator: inspect an individually enrolled endpoint. |
 | `register-session` | Legacy per-session enrolment only; not part of a fresh install. |
-| `exchange` | Legacy send-and-wait; returned mail may be unrelated to the request. |
+| `exchange` | Send and receive inside a tool call; match the correlated reply. Legacy endpoints retain ordinary send. |
+| `wait` | Continue receiving inside a bounded tool call without resending. |
+| `listen` | Receiving-chat-owned background task; exit on pending mail without claiming it. |
+| `unattend` | Release this session's listener token. |
 
 Install/relink requests are guided workflows, not extra executable CLI modes. They also require help and collection of missing details before changes.
 
@@ -111,3 +114,18 @@ Include the actual material to review in the request, or an explicitly accessibl
 The skill gets the source session ID from reliable native context and matches it to discovery. If unavailable, it asks the user to identify their source chat; this does not register the chat. Every mail/worker input includes that `session_id`.
 
 The CLI returns a request ID, not an immediate answer. Agents use `status`, `check` and the reply workflow in [onboarding](onboarding.md) to handle the answer automatically. In conversation, show at most a brief “Checking with Codex.” followed by the useful answer; request IDs and delivery states belong in diagnostics, and users should not have to chase replies. Leading `/` is accepted for CLI mode names too, but the conversational `<session> <request>` shorthand is not CLI syntax: the CLI uses private directory and JSON-file paths.
+
+## Receive quietly inside a tool call
+
+For agents awaiting an answer, use `session.exchange` with the normal request fields and optional `timeout_ms` (up to 25,000). Continue with `session.wait` if the reply takes longer; do not send the request again. Match each reply's `in_reply_to` and complete its claim. Other mail can arrive in the same result.
+
+The CLI equivalents are:
+
+```sh
+node scripts/ihcp.mjs exchange <harness-dir> <request.json>
+node scripts/ihcp.mjs wait <harness-dir> <source-session.json>
+```
+
+The wait file contains `{"session_id":"<source-native-id>","timeout_ms":25000}`. Source identity and credentials are unchanged. New tools may require the harness's supported MCP reconnect. A closed old transport can use the bundled client fallback documented in the skill; it is a real shell-tool result, not proof that native MCP tools have reloaded.
+
+For native Claude background tasks, `listen` accepts `{"session_id":"<source-native-id>","duration_ms":3600000}`. Start it from the receiving session's own background-task API, never as an unrelated detached process. It exits with a pending count and attendance token; the native completion event lets the owner claim its inbox. `unattend` takes that source ID and token. Help is available for every command. See [native adapters](native-adapters.md#quiet-delivery-and-native-ui-limits) for the idle Codex fallback and timeout behavior.

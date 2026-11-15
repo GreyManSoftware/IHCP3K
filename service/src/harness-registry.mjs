@@ -110,6 +110,7 @@ export class HarnessRegistry{
   return {...p,id:source.endpoint,endpoint:source.endpoint,permissions:['send','claim','status','wake','discover'],scopes:{send:targets,claim:[source.endpoint],status:[source.endpoint],wake:[source.endpoint],discover:targets}};
  }
  async invoke(p,operation,{session_id,...args},signal){
+  if(operation==='exchange'||operation==='wait'||operation==='listen')return this.inboxCall(p,operation,session_id,args,signal);
   // Never use a mutable connection-wide current-session value: clients may share one process.
   if(['request','send','reply'].includes(operation))await this.discover(p,{},signal);
   const principal=await this.sessionPrincipal(p,session_id,signal);
@@ -124,6 +125,49 @@ export class HarnessRegistry{
    try{result.native_notification=this.store.notifications?await this.store.notifications.dispatch(recipient):{status:'unconfigured'};}catch{result.native_notification={status:'uncertain'};}
   }
   return Array.isArray(result)?{messages:result}:result;
+ }
+ async inboxCall(p,operation,session_id,args,signal){
+  const timeout=args.timeout_ms??25000;
+  check(Number.isInteger(timeout)&&timeout>=0&&timeout<=25000,'INVALID_TIMEOUT');
+  if(operation==='exchange')await this.discover(p,{},signal);
+  const principal=await this.sessionPrincipal(p,session_id,signal),recipient=principal.endpoint;
+  check(!signal?.aborted,'CANCELLED');
+  if(operation==='exchange')check(principal.scopes.send.includes(args.recipient),'RECIPIENT_NOT_DISCOVERED_OR_PERMITTED');
+  const listen=operation==='listen';
+  let attendance;
+  if(listen&&args.attendance_token){
+   attendance={recipient,attendance_token:args.attendance_token};
+   this.store.transaction(()=>{this.store.attendedBy(principal,attendance);this.db.prepare('UPDATE attendance SET deadline=? WHERE recipient=?').run(this.store.now()+120000,recipient);});
+  }else attendance=this.store.attend(principal,{recipient,handler_id:listen?'ihcp-listen':recipient,lease_s:120});
+  let keep=false,request;
+  try{
+   if(operation==='exchange'){
+    request=this.store.request(principal,{recipient:args.recipient,body:args.body,idempotency_key:args.idempotency_key});
+    // Attendance exists before the peer can reply, including from another runtime.
+    try{request.native_notification=this.store.notifications?await this.store.notifications.dispatch(args.recipient):{status:'unconfigured'};}catch{request.native_notification={status:'uncertain'};}
+   }
+   if(listen){
+    const end=Date.now()+timeout;
+    do{
+     this.row(p);this.store.attendedBy(principal,attendance);
+     if(signal?.aborted)return {status:'cancelled'};
+     if(this.store.paused(recipient))return {status:'paused'};
+     const count=this.store.pending(recipient);
+     if(count){
+      // Give the target-owned background task time to surface its completion.
+      this.db.prepare('UPDATE attendance SET deadline=? WHERE recipient=?').run(this.store.now()+15000,recipient);
+      keep=true;return {status:'pending',pending_count:count,...attendance};
+     }
+     if(Date.now()>=end){keep=true;return {status:'timeout',...attendance};}
+     await this.store.changedWithin(recipient,Math.min(200,end-Date.now()),signal);
+    }while(true);
+   }
+   const result=await this.store.receive(principal,{...attendance,timeout_ms:timeout,limit:20,lease_s:300},signal);
+   this.row(p);
+   return {...result,...(request?{request_id:request.id,request}:{}),notification_already_dispatched:attendance.notification_already_dispatched??false};
+  }finally{
+   if(!keep)try{this.store.unattend(principal,attendance);}catch{/* Revocation or expiry already removed/fenced this lease. */}
+  }
  }
  notificationFor(endpoint){
   const row=this.db.prepare('SELECT h.config_json,h.active AS harness_active,e.active,e.revision,s.native_id FROM harness_sessions s JOIN harnesses h ON h.id=s.harness JOIN endpoints e ON e.id=s.endpoint WHERE s.endpoint=?').get(endpoint);

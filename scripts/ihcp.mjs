@@ -6,6 +6,7 @@ import {spawnSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {parseInvocation} from './usage.mjs';
 import {resolveTarget} from './resolve-target.mjs';
+import {listenInbox} from './listen-inbox.mjs';
 import {connect,call,exchange} from '../service/dist/client.mjs';
 const read=f=>JSON.parse(fs.readFileSync(f,'utf8').replace(/^\uFEFF/,''));
 const write=(f,v)=>fs.writeFileSync(f,JSON.stringify(v,null,2)+'\n',{mode:0o600});
@@ -106,6 +107,12 @@ export async function main(args=process.argv.slice(2)){
    return withClient(harness.runtime_file,path.join(dir,'harness.tok'),async c=>{
      if(mode==='discover'||mode==='refresh')return call(c,'harness.discover',{force:mode==='refresh',...(input?read(input):{})});
      if(mode==='resolve')return resolveTarget(c,read(input),{invoke:call});
+     if(mode==='listen'){
+       const stop=new AbortController(),cancel=()=>stop.abort();
+       process.once('SIGINT',cancel);process.once('SIGTERM',cancel);
+       try{return await listenInbox(c,read(input),{invoke:call,signal:stop.signal});}
+       finally{process.off('SIGINT',cancel);process.off('SIGTERM',cancel);}
+     }
      if(mode==='unlink'){const result=await call(c,'harness.unregister',{});write(harnessFile,{...harness,linked:false});return result;}
      if(['worker','worker-status','worker-ack'].includes(mode)){
        if(!input)return parseInvocation([mode,'--help']);
@@ -113,7 +120,7 @@ export async function main(args=process.argv.slice(2)){
        if(mode==='worker')return runWorker(c,payload,{stdio:true,invoke:(client,name,args)=>call(client,'session.'+name.replace('.','_'),{session_id,...args})});
        return call(c,mode==='worker-status'?'session.worker_status':'session.worker_ack',{session_id,...payload});
      }
-     const operations={remote_prompt:'request',check:'claim',status:'status',reply:'reply',send:'send',complete:'complete',renew:'renew',release:'release'};
+     const operations={remote_prompt:'request',exchange:'exchange',wait:'wait',unattend:'unattend',check:'claim',status:'status',reply:'reply',send:'send',complete:'complete',renew:'renew',release:'release'};
      if(!operations[mode])throw Error('MODE_REQUIRES_SESSION_WORKER_CONFIGURATION');
      if(!input)return parseInvocation([mode,'--help']);
      const payload=read(input),op=mode==='status'&&payload.id?'request_status':operations[mode];

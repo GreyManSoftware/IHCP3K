@@ -1,6 +1,6 @@
 # Agent setup and operation
 
-Install **IHCP3K 1.2.2** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
+Install **IHCP3K 1.2.3** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
 
 ## First install
 
@@ -92,7 +92,7 @@ Call `harness.discover` or `node scripts/ihcp.mjs discover <harness-dir>`. It re
 
 A complete successful scan adds new sessions and disables missing ones. Failed or partial scans retain the last inventory with an explicit error/stale flag; they do not authorize sending against that failed scan. A label is for display, not routing. Use the exact returned address.
 
-For a request, call `session.request` with `session_id`, `recipient`, `body`, and a stable `idempotency_key`. The source ID may be its native ID or its discovered address; the destination must be the exact discovered address. The returned request ID tracks the reply. Receivers use `session.claim`, `session.reply` and `session.complete`, always identifying their own source session. Help for every CLI mode is available with `--help`; see [usage](docs/usage.md).
+For a request whose answer is needed now, prefer `session.exchange` and continue with `session.wait` if needed. Returned messages are real tool results; correlate and complete their claims. For an asynchronous request, call `session.request` with `session_id`, `recipient`, `body`, and a stable `idempotency_key`. The source ID may be its native ID or its discovered address; the destination must be the exact discovered address. The returned request ID tracks the reply. Receivers use `session.claim`, `session.reply` and `session.complete`, always identifying their own source session. Help for every CLI mode is available with `--help`; see [usage](docs/usage.md).
 
 Do not send work just because a model or session appears in discovery. User authorization, selected model and native permissions still apply.
 
@@ -103,6 +103,8 @@ Use the skill's quiet messaging behavior: at most “Checking with Codex.”, th
 Registration/discovery does not prove that a receiving chat has read a message. Configure and validate notifications **once per harness**. A required top-level `notification` template in the registration configuration is inherited by discovered sessions, with exact native IDs filled by the service; users do not register notification targets individually.
 
 Codex registration defaults to `{"enabled":true,"type":"codex-queue"}`. Claude requires `{"enabled":true,"type":"claude-message","binding_mode":"session-file","model":"<verified available model>","verified":true,"max_turns":6}`. Validate the installed restricted messaging route before setting `verified:true`. It maps the discovered UUID through native session registration metadata, checks a unique current native reference, and rechecks the binding before sending. Missing or ambiguous targets leave mail pending. See [native adapters](docs/native-adapters.md).
+
+Where Claude exposes a target-owned background task with native completion events, use the skill's `listen` workflow to receive without inserting a user-message notification. This is a session-owned bounded task, not another registration or an OS service. Retain the native-message adapter as the crash/idle fallback. Do not require a listener or another question to finish installation; idle Codex has no verified hidden wake API.
 
 **Notifications are part of setup, not an optional extra.** Test a harmless request and reply while each receiving chat is idle, without asking either user to check an inbox. Record native queuing separately from the receiving chat actually claiming and answering. Do not call the install complete with disabled, unconfigured or untested notifications. If native access is blocked, report setup as incomplete and the exact blocker; preserve the pending message. Closed-app delivery is a separate capability and must not be promised without proof.
 
