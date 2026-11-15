@@ -53,7 +53,7 @@ async function getPackage(info,cache,options){
 export async function verifyRuntime(runtimeFile,harnessDir){
  const runtime=read(runtimeFile),{connect}=await import(pathToFileURL(runtime.client_bundle).href+'?version='+runtime.version);
  const c=await connect({runtimeFile,tokenFile:path.join(harnessDir,'harness.tok')});
- try{const tools=(await c.listTools()).tools.map(t=>t.name);if(c.getServerVersion()?.version!==runtime.version||!tools.includes('harness.discover')||!tools.includes('session.exchange'))throw Error('UPDATED_MCP_HEALTH_FAILED');return {version:runtime.version,tools:tools.length};}finally{await c.close();}
+ try{const tools=(await c.listTools()).tools.map(t=>t.name);if(c.getServerVersion()?.version!==runtime.version||!tools.includes('harness.discover')||!tools.includes('session.exchange')||!tools.includes('harness.health'))throw Error('UPDATED_MCP_HEALTH_FAILED');const health=await c.callTool({name:'harness.health',arguments:{}});if(health.isError||health.structuredContent?.version!==runtime.version)throw Error('UPDATED_MCP_HEALTH_FAILED');return {version:runtime.version,tools:tools.length};}finally{await c.close();}
 }
 function rollback(state,root){
  const {txn,files}=state;within(path.join(root,'data','updates'),txn);let conflict=false;
@@ -140,7 +140,11 @@ export async function update(harnessDir,{check=false,home=os.homedir(),env=proce
   const files=plans.filter(p=>p.status==='planned'&&p.before!==p.after).map(p=>({path:p.file,before:p.before,after:p.after}));
   for(const folder of [path.join(home,'.agents','skills','harness-interop'),path.join(env.CODEX_HOME||path.join(home,'.codex'),'skills','harness-interop'),path.join(env.CLAUDE_CONFIG_DIR||path.join(home,'.claude'),'skills','harness-interop')]){
    const file=path.join(folder,'SKILL.md');if(!fs.existsSync(file))continue;
-   if(fs.realpathSync(file)!==file)throw Error('SKILL_LINK_NOT_ALLOWED');
+   const real=fs.realpathSync(file);
+   // Standard installations link the shared skill to this verified package.
+   // The app swap updates that canonical file; never copy through the alias.
+   if(real===path.join(app,'skills','harness-interop','SKILL.md'))continue;
+   if(real!==file)throw Error('SKILL_LINK_NOT_ALLOWED');
    const before=fs.readFileSync(file,'utf8'),old=previous.files.get('skills/harness-interop/SKILL.md');
    if(!same(Buffer.from(before),old,'SKILL.md'))throw Error('LOCAL_SKILL_MODIFIED');
    files.push({path:file,before,after:candidate.files.get('skills/harness-interop/SKILL.md').toString('utf8')});

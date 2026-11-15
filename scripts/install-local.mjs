@@ -72,7 +72,7 @@ export async function install(target,{backupFile,sha256,workingDirectory=target}
       fs.writeFileSync(path.join(dir,'bundles','stdio.mjs'),stdio,{flag:'wx',mode:0o600});
       fs.writeFileSync(path.join(dir,'bundles','client.mjs'),client,{flag:'wx',mode:0o600});
       if(!fs.statSync(workingDirectory).isDirectory())throw Error('WORKING_DIRECTORY_REQUIRED');
-      write(runtimeFile,{transport:'stdio',version:'1.2.4',schema_version:6,initialized:false,service_id:serviceId,private_dir:dir,working_directory:path.resolve(workingDirectory),database:path.join(dir,'mail.db'),service_config:path.join(dir,'service.json'),bundle:path.join(dir,'bundles','stdio.mjs'),client_bundle:path.join(dir,'bundles','client.mjs'),bundle_sha256:digest(stdio),client_sha256:digest(client),notifications:{},workers:{}});
+      write(runtimeFile,{transport:'stdio',version:'1.2.5',schema_version:6,initialized:false,service_id:serviceId,private_dir:dir,working_directory:path.resolve(workingDirectory),database:path.join(dir,'mail.db'),service_config:path.join(dir,'service.json'),bundle:path.join(dir,'bundles','stdio.mjs'),client_bundle:path.join(dir,'bundles','client.mjs'),bundle_sha256:digest(stdio),client_sha256:digest(client),notifications:{},workers:{}});
       if(backupFile){
         // Import an integrity-checked snapshot into a NEW private root only.
         // No source mutation, native relink, unpause, or service cutover occurs.
@@ -114,7 +114,7 @@ export async function install(target,{backupFile,sha256,workingDirectory=target}
     }
     const client=await connect({runtimeFile,tokenFile});
     try {
-      if(client.getServerVersion()?.version!=='1.2.4')throw Error('RUNTIME_VERSION_MISMATCH');
+      if(client.getServerVersion()?.version!=='1.2.5')throw Error('RUNTIME_VERSION_MISMATCH');
       const {tools}=await client.listTools();
       if(!tools.some(t=>t.name==='directory.enroll')||!tools.some(t=>t.name==='directory.inspect'))throw Error('RUNTIME_TOOLS_MISMATCH');
       await verifyDatabase(runtime);

@@ -104,7 +104,7 @@ MCP (Model Context Protocol) exposes IHCP3K tools to each assistant. SQLite stor
 
 For an unloaded Claude Desktop chat, IHCP3K can ask an already-live desktop session to wake the existing target, then deliver the request directly. It creates no replacement chat. At least one Claude Desktop session must be reachable; the CLI alone cannot start an unloaded target.
 
-**Version 1.2.4.** Automatic notifications and a request/reply round trip have been tested between installed Claude and Codex sessions. Setup includes notifications as standard. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md), including connection-reload and closed-app limits.
+**Version 1.2.5.** Automatic notifications and a request/reply round trip have been tested between installed Claude and Codex sessions. Setup includes notifications as standard. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md), including connection-reload and closed-app limits.
 
 [Download](https://github.com/GreyManSoftware/IHCP3K/releases) · [Agent setup](AGENT_SETUP.md) · [Architecture](docs/architecture.md) · [Technical terms](docs/terminology.md)
 

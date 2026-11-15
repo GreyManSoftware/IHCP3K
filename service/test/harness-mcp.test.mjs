@@ -21,6 +21,7 @@ test('one harness MCP configuration serves separate sessions; revocation applies
  const [a,b]=clients,call=async(c,name,args={})=>{const result=await c.callTool({name,arguments:args});assert.equal(result.isError,undefined,JSON.stringify(result));return result.structuredContent;};
  const names=(await a.listTools()).tools.map(x=>x.name);assert.ok(names.includes('harness.discover'));assert.ok(names.includes('session.request'));assert.ok(!names.includes('harness.register'));assert.ok(!names.includes('mail.claim'));
  assert.equal((await call(a,'harness.discover')).harnesses.length,2);
+ const health=await call(a,'harness.health');assert.equal(health.version,a.getServerVersion().version);assert.equal(health.schema_version,6);assert.equal(health.instance_id,store.instanceId);
  const job=await call(a,'session.worker_start',{session_id:'alpha-1',adapter:'reader',prompt:'read only',idempotency_key:'work'});
  await call(a,'session.worker_wait',{session_id:'alpha-1',id:job.id,timeout_ms:1000});
  const deniedWorker=await b.callTool({name:'session.worker_start',arguments:{session_id:'beta-1',adapter:'reader',prompt:'no grant',idempotency_key:'denied'}});assert.equal(deniedWorker.isError,true);

@@ -65,6 +65,6 @@ export function discoverSessions(config,{spawnProcess=spawn,signal}={}){
    try{if(c.type==='claude')result=normalizeSessions('claude',JSON.parse(stdout),max);check(result!==undefined,'DISCOVERY_INCOMPLETE');resolve(result);}
    catch(e){reject(e instanceof ServiceError?e:new ServiceError('DISCOVERY_INVALID_OUTPUT'));}
   });
-  if(c.type==='codex')send({id:1,method:'initialize',params:{clientInfo:{name:'ihcp3k_discovery',version:'1.2.4'}}});else child.stdin.end();
+  if(c.type==='codex')send({id:1,method:'initialize',params:{clientInfo:{name:'ihcp3k_discovery',version:'1.2.5'}}});else child.stdin.end();
  });
 }

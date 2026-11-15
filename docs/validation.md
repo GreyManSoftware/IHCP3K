@@ -1,5 +1,14 @@
 # Validation
 
+## 1.2.5 linked skills and native health
+
+The final pinned-container suite passed **151 tests** (87 service, 16 legacy waiter, 27 CLI/help/resolver/listener/update, 13 legacy import, 8 installer). Eighteen updater/help checks and eight packaged installer checks passed separately on Windows.
+
+A real update of a 1.2.3 installation stopped safely before activation because the shared skill was a directory link into the verified app package. The updater now recognises that exact owned target, preserves the link and updates its canonical file with the package. Other unexpected links remain rejected. A Windows/Linux regression test covers this layout.
+
+The read-only `harness.health` tool identifies the process actually serving a native connection, allowing agents to distinguish an old connection from the newly installed runtime. Fresh-client health and native-host health are separate checks.
+
+
 ## 1.2.4 managed updates
 
 The full pinned-container suite passed **150 tests** (87 service, 16 legacy waiter, 26 CLI/help/resolver/listener/update, 13 legacy import, 8 installer). Windows updater/help checks passed separately after adding ACL preservation; all eight Windows packaged installer checks also passed. Targeted follow-up checks cover the final archive-path and CLI-help changes.

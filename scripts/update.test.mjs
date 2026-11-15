@@ -75,6 +75,14 @@ test('a dead updater is recovered before validating partially activated files',a
  const result=await update(f.dir,f.options);assert.equal(result.previous,'1.2.3');assert.equal(result.installed,'1.2.4');
  assert.equal(fs.readFileSync(f.skill,'utf8'),'skill 1.2.4');
 });
+test('shared skill links to the verified app survive an update without duplicate writes',async t=>{
+ const f=fixture(t),folder=path.dirname(f.skill),target=path.join(f.root,'app','skills','harness-interop');
+ assert.ok(folder.startsWith(f.base+path.sep));fs.rmSync(folder,{recursive:true});
+ fs.symlinkSync(target,folder,process.platform==='win32'?'junction':'dir');
+ assert.equal((await update(f.dir,f.options)).status,'updated');
+ assert.equal(fs.realpathSync(f.skill),path.join(target,'SKILL.md'));assert.equal(fs.readFileSync(f.skill,'utf8'),'skill 1.2.4');
+ assert.equal((await update(f.dir,f.options)).status,'up_to_date');
+});
 test('bad checksum, local modifications, concurrent updates and active workers leave installation intact',async t=>{
  for(const kind of ['checksum','app','skill','lock','worker'])await t.test(kind,async t=>{
   const f=fixture(t);
