@@ -1,5 +1,7 @@
 # Inter-Harness Communication Protocol 3000
 
+<p align="center"><img src="docs/images/ihcp3k-logo.png" alt="IHCP3K logo: Claude, Codex and Copilot linked inside a heart" width="320"></p>
+
 **Your AI assistants, working together.**
 
 Have subscriptions to Claude, Codex and GitHub Copilot? It's frustrating to hit the limit in one while another sits unused. Or to want another model's opinion without copying your conversation into a different app.
