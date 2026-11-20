@@ -1,9 +1,11 @@
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {ServiceError} from './store.mjs';
+import {resolveExecutable,validateResolution} from './trusted-executable.mjs';
 const check=(v,c)=>{if(!v)throw new ServiceError(c);};
 export function validateDiscovery(c){
  check(c&&['codex','claude'].includes(c.type),'DISCOVERY_UNSUPPORTED');
+ validateResolution(c);
  check(typeof c.executable==='string'&&path.isAbsolute(c.executable)&&!/[\r\n]/.test(c.executable)&&! /\.(cmd|bat|ps1|sh)$/i.test(c.executable),'INVALID_DISCOVERY_EXECUTABLE');
  check(typeof c.cwd==='string'&&path.isAbsolute(c.cwd),'INVALID_DISCOVERY_CWD');
  check(c.transport===undefined||['stdio','proxy'].includes(c.transport),'INVALID_DISCOVERY_TRANSPORT');
@@ -23,7 +25,7 @@ export function normalizeSessions(type,rows,max=10000){
 }
 // Fixed, read-only native interfaces. No model calls, transcript reads, resumes or fallback commands.
 export function discoverSessions(config,{spawnProcess=spawn,signal}={}){
- validateDiscovery(config);const c=config,max=c.max_sessions??10000;
+ validateDiscovery(config);const c=config,max=c.max_sessions??10000,executable=resolveExecutable(c);
  return new Promise((resolve,reject)=>{
   const args=c.type==='claude'?['agents','--json']:c.transport==='proxy'?['app-server','proxy']:['app-server','--stdio'];
   const env={...process.env};delete env.NODE_OPTIONS;delete env.NODE_PATH;
@@ -34,7 +36,7 @@ export function discoverSessions(config,{spawnProcess=spawn,signal}={}){
   const list=()=>send({id:++seq,method:'thread/list',params:{limit:100,cursor,archived:false,useStateDbOnly:true,modelProviders:[],sourceKinds:['cli','vscode','exec','appServer','subAgent','subAgentReview','subAgentCompact','subAgentThreadSpawn','subAgentOther','unknown']}});
   const abort=()=>finishError('DISCOVERY_CANCELLED');
   if(signal?.aborted){reject(new ServiceError('DISCOVERY_CANCELLED'));return;}
-  try{child=spawnProcess(c.executable,args,{cwd:c.cwd,env,windowsHide:true,shell:false,stdio:['pipe','pipe','pipe']});}
+  try{child=spawnProcess(executable,args,{cwd:c.cwd,env,windowsHide:true,shell:false,stdio:['pipe','pipe','pipe']});}
   catch{reject(new ServiceError('DISCOVERY_START_FAILED'));return;}
   timer=setTimeout(()=>finishError('DISCOVERY_TIMEOUT'),c.timeout_ms??15000);
   signal?.addEventListener('abort',abort,{once:true});
@@ -65,6 +67,6 @@ export function discoverSessions(config,{spawnProcess=spawn,signal}={}){
    try{if(c.type==='claude')result=normalizeSessions('claude',JSON.parse(stdout),max);check(result!==undefined,'DISCOVERY_INCOMPLETE');resolve(result);}
    catch(e){reject(e instanceof ServiceError?e:new ServiceError('DISCOVERY_INVALID_OUTPUT'));}
   });
-  if(c.type==='codex')send({id:1,method:'initialize',params:{clientInfo:{name:'ihcp3k_discovery',version:'1.3.0'}}});else child.stdin.end();
+  if(c.type==='codex')send({id:1,method:'initialize',params:{clientInfo:{name:'ihcp3k_discovery',version:'1.4.0'}}});else child.stdin.end();
  });
 }

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import {resolveExecutable} from '../service/src/trusted-executable.mjs';
 import {spawn} from 'node:child_process';
 
 export function markedArgs(args,runtime,version){
@@ -37,7 +38,8 @@ export function planConnections(runtime,version,{home=os.homedir(),env=process.e
   const h=JSON.parse(fs.readFileSync(location,'utf8'));if(!h.linked)continue;
   const reg=JSON.parse(fs.readFileSync(path.join(dir,id,'registration.json'),'utf8')),type=reg.discovery?.type;
   const file=type==='codex'?path.join(env.CODEX_HOME||path.join(home,'.codex'),'config.toml'):type==='claude'?path.join(env.CLAUDE_CONFIG_DIR||home,env.CLAUDE_CONFIG_DIR?'.claude.json':'.claude.json'):null;
-  const base={harness:id,type,executable:reg.discovery?.executable};
+  let executable;try{executable=resolveExecutable(reg.discovery);}catch{plans.push({harness:id,type,status:'native_configuration_required',reason:'EXECUTABLE_RESOLUTION_FAILED'});continue;}
+  const base={harness:id,type,executable};
   if(!file||!fs.existsSync(file)){plans.push({...base,status:'native_configuration_required'});continue;}
   try{
    if(fs.lstatSync(file).isSymbolicLink()||fs.realpathSync(file)!==path.resolve(file))throw Error('CONFIG_LINK_NOT_ALLOWED');

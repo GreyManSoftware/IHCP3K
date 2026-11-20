@@ -25,9 +25,14 @@ test('one harness MCP configuration serves separate sessions; revocation applies
  assert.equal(remote.reply_to,sessionAddress('alpha','alpha-1'));
  assert.equal((await call(a,'session.worker_wait',{session_id:'alpha-1',id:remote.id,timeout_ms:1000})).state,'completed');
  for(const change of [{allow_new_session:false},{permissions:'workspace-write'}])assert.equal((await a.callTool({name:'session.remote_prompt',arguments:{session_id:'alpha-1',harness:'beta',prompt:'no',allow_new_session:true,idempotency_key:'denied',...change}})).isError,true);
- const names=(await a.listTools()).tools.map(x=>x.name);assert.ok(names.includes('harness.discover'));assert.ok(names.includes('session.request'));assert.ok(!names.includes('harness.register'));assert.ok(!names.includes('mail.claim'));
+ const names=(await a.listTools()).tools.map(x=>x.name);assert.ok(names.includes('harness.discover'));assert.ok(names.includes('session.request'));assert.ok(!names.includes('harness.register'));assert.ok(!names.includes('harness.configure'));assert.ok(!names.includes('mail.claim'));
  assert.equal((await call(a,'harness.discover')).harnesses.length,2);
  const health=await call(a,'harness.health');assert.equal(health.version,a.getServerVersion().version);assert.equal(health.schema_version,6);assert.equal(health.instance_id,store.instanceId);
+ const operator={id:'admin',permissions:['registry']},adminServer=createToolServer(store,store.directory,operator);
+ const adminClient=new Client({name:'operator-test',version:'1'});const [opA,opB]=InMemoryTransport.createLinkedPair();await adminServer.connect(opA);await adminClient.connect(opB);t.after(async()=>{await adminClient.close();await adminServer.close();});
+ const config={harness:'alpha',expected_revision:1,discovery:{type:'codex',executable:'/updated/codex',cwd:'/alpha'},profile:{...profile,native_version:'updated'}};
+ assert.equal((await call(adminClient,'harness.configure',config)).revision,2);
+ await call(a,'session.status',{session_id:'alpha-1'});
  const job=await call(a,'session.worker_start',{session_id:'alpha-1',adapter:'reader',prompt:'read only',idempotency_key:'work'});
  await call(a,'session.worker_wait',{session_id:'alpha-1',id:job.id,timeout_ms:1000});
  const deniedWorker=await b.callTool({name:'session.worker_start',arguments:{session_id:'beta-1',adapter:'reader',prompt:'no grant',idempotency_key:'denied'}});assert.equal(deniedWorker.isError,true);

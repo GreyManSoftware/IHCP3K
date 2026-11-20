@@ -122,8 +122,10 @@ MCP (Model Context Protocol) exposes IHCP3K tools to each assistant. SQLite stor
 
 Suspended Claude Desktop chats can be opened automatically before delivery, including when no chat is currently running. IHCP3K verifies the existing chat’s identity and excludes archived chats; it does not create a replacement. The Windows path has been tested. Desktop versions with an unfamiliar metadata layout need a compatible adapter; see [wake behavior](docs/native-adapters.md#unloaded-claude-desktop-targets).
 
-**Version 1.3.0.** Automatic notifications and a request/reply round trip have been tested between installed Claude and Codex sessions. Setup includes notifications as standard. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md), including connection-reload and closed-app limits.
+**Version 1.4.0.** Automatic notifications and a request/reply round trip have been tested between installed Claude and Codex sessions. Setup includes notifications as standard. Automatic session discovery supports the installed Codex and Claude listing interfaces. Copilot discovery is not implemented; its notification adapter remains experimental. Other harnesses need compatibility checks; see [validation](docs/validation.md), including connection-reload and closed-app limits.
 
 [Download](https://github.com/GreyManSoftware/IHCP3K/releases) · [Agent setup](AGENT_SETUP.md) · [Architecture](docs/architecture.md) · [Technical terms](docs/terminology.md)
 
 Independent project; not affiliated with the harness vendors. License selection is pending.
+
+See [native app updates and retained inboxes](docs/app-updates.md) for operator-pinned executable resolution, in-place configure/profile refresh, stale health and safe inbox access during failed discovery. Do not unregister or rotate credentials to repair a changed native executable.

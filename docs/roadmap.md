@@ -2,11 +2,11 @@
 
 This page separates implemented features from future work. A **harness** is an app that runs an agent; an **adapter** connects that app's own commands to IHCP3K. See [terminology](terminology.md) for implementation terms.
 
-## Version 1.3.0
+## Version 1.4.0
 
 The implementation was tested during the earlier development releases, including a bounded two-harness rehearsal; native setup and migration still require installed-version verification. See [validation](validation.md) for reported checks and remaining evidence gaps.
 
-Version 1.3.0 provides local MCP stdio on an existing Node runtime, a shared SQLite schema, idempotent private installation, explicit correlated requests/replies, trusted native notifications and bounded worker jobs/results. It retains the directory and scoped credentials. The optional Docker/HTTP deployment remains v0.4 compatibility mode, without the new stdio request/worker APIs.
+Version 1.4.0 provides local MCP stdio on an existing Node runtime, a shared SQLite schema, idempotent private installation, explicit correlated requests/replies, trusted native notifications and bounded worker jobs/results. It retains the directory and scoped credentials. The optional Docker/HTTP deployment remains v0.4 compatibility mode, without the new stdio request/worker APIs.
 
 First installation asks where to save the files. The agent arranges the internal folders and records versions, model evidence, privileges, native bindings and retention. Native configuration is prepared for explicit setup. Offline backup restore to a new directory is distinct from live cutover and does not switch callers or unpause mail.
 

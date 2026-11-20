@@ -166,6 +166,13 @@ test('bundled local install, strict reuse and explicit stdio CLI workflow',async
     write(input,{harness:'synthetic-harness',discovery:{type:'codex',executable:process.execPath,cwd:base},profile:{label:'Synthetic',source:'fixture',observed_at:new Date().toISOString(),fresh_for_s:600,models:[],usage:[],wake:{type:'manual',lifetime:'test',closed_app:'unknown',human_fallback:'check'}}});
     const first=await cli(['register',runtimeFile,input,harnessDir]);assert.equal(first.registered,true);
     const second=await cli(['register',runtimeFile,input,harnessDir]);assert.equal(second.reused,true);
+    const originalToken=fs.readFileSync(path.join(harnessDir,'harness.tok'),'utf8');
+    const details=read(input),updateFile=path.join(base,'configure.json');
+    details.profile.native_version='new-version';write(updateFile,{expected_revision:1,profile:details.profile});
+    assert.equal((await cli(['configure',harnessDir,updateFile])).revision,2);
+    assert.equal((await cli(['configure',harnessDir,updateFile])).reused,true);
+    assert.equal(fs.readFileSync(path.join(harnessDir,'harness.tok'),'utf8'),originalToken);
+    write(input,details);
     assert.equal(fs.existsSync(path.join(harnessDir,'session.tok')),false);assert.equal(fs.existsSync(path.join(harnessDir,'harness.tok')),true);
     assert.equal((await cli(['unregister',harnessDir])).registered,false);
     assert.equal((await cli(['unregister',harnessDir])).registered,false);

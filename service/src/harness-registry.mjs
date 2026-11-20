@@ -4,6 +4,8 @@ import {checkAdmission,RETENTION} from './retention.mjs';
 import {discoverSessions,validateDiscovery} from './session-discovery.mjs';
 import {buildNativeCommand} from './native-adapters.mjs';
 import {remoteWorkConfig} from './remote-work.mjs';
+import {resolveExecutable} from './trusted-executable.mjs';
+import {existsSync} from 'node:fs';
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const check=(v,c)=>{if(!v)throw new ServiceError(c);};
 const validId=v=>typeof v==='string'&&/^[a-z][a-z0-9-]{0,63}$/.test(v);
@@ -17,7 +19,7 @@ export class HarnessRegistry{
   store.harnesses=this;
  }
  authenticate(secret){const h=hash(secret),row=this.db.prepare('SELECT id,revision FROM harnesses WHERE active=1 AND token_hash=?').get(h);return row?{id:'harness:'+row.id,harness:row.id,harness_hash:h,harness_revision:row.revision,permissions:['harness']}:null;}
- active(p){return !p.harness_hash||!!this.db.prepare('SELECT 1 FROM harnesses WHERE id=? AND active=1 AND token_hash=? AND revision=?').get(p.harness,p.harness_hash,p.harness_revision);}
+ active(p){return !p.harness_hash||!!this.db.prepare('SELECT 1 FROM harnesses WHERE id=? AND active=1 AND token_hash=?').get(p.harness,p.harness_hash);}
  row(p){check(this.active(p)&&p.permissions.includes('harness'),'FORBIDDEN');const row=this.db.prepare('SELECT * FROM harnesses WHERE id=? AND active=1').get(p.harness);check(row,'HARNESS_UNREGISTERED');return row;}
  register(p,{harness,credential,discovery,profile,peers=['*'],notification}){
   check(p.permissions.includes('registry'),'FORBIDDEN');check(validId(harness)&&typeof credential==='string'&&/^[A-Za-z0-9_-]{43,128}$/.test(credential),'INVALID_HARNESS');
@@ -44,6 +46,34 @@ export class HarnessRegistry{
    this.db.prepare('INSERT INTO harnesses VALUES(?,?,1,?,?,?,?,NULL,NULL) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,active=1,token_hash=excluded.token_hash,config_json=excluded.config_json,profile_json=excluded.profile_json,peers_json=excluded.peers_json,last_scan=NULL,last_error=NULL').run(harness,revision,...fields);
    this.store.directory.audit(p,'register-harness',harness);return {harness,revision,registered:true,reused:false};
   });
+ }
+ configure(p,{harness,expected_revision,discovery,profile,notification}){
+  check(p.permissions.includes('registry'),'FORBIDDEN');validateDiscovery(discovery);this.store.directory.validateProfile(profile);
+  return this.store.transaction(()=>{
+   const old=this.db.prepare('SELECT * FROM harnesses WHERE id=? AND active=1').get(harness);check(old,'HARNESS_UNREGISTERED');
+   const previous=JSON.parse(old.config_json);check(discovery.type===previous.type,'HARNESS_TYPE_CHANGE_REQUIRES_RELINK');
+   check(Object.keys(discovery).every(k=>['type','executable','cwd','timeout_ms','max_sessions','transport','executable_resolution'].includes(k)),'INVALID_DISCOVERY_FIELD');
+   const template=notification??previous.notification;
+   check(template?.enabled===true&&template.type===previous.notification?.type,'INVALID_NOTIFICATION_TEMPLATE');
+   check(buildNativeCommand({...template,executable:discovery.executable,cwd:discovery.cwd,native_session_id:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',target:{stable_id:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'},permissions:'read-only',persist:false},'notify',{recipient:'setup-check'}).status==='ready','INVALID_NOTIFICATION_TEMPLATE');
+   const config=JSON.stringify({...discovery,notification:template}),snapshot=JSON.stringify(profile);
+   if(old.config_json===config&&old.profile_json===snapshot)return {harness,revision:old.revision,configured:true,reused:true};
+   check(Number.isInteger(expected_revision)&&old.revision===expected_revision,'HARNESS_REVISION_CONFLICT');
+   check(Date.parse(profile.observed_at)>=Date.parse(JSON.parse(old.profile_json).observed_at),'STALE_OBSERVATION');
+   this.db.prepare('UPDATE harnesses SET config_json=?,profile_json=?,revision=revision+1,last_scan=NULL,last_error=NULL WHERE id=?').run(config,snapshot,harness);
+   this.db.prepare('UPDATE endpoints SET profile_json=? WHERE harness=?').run(snapshot,harness);
+   this.db.prepare('DELETE FROM harness_scans WHERE harness=?').run(harness);
+   this.store.directory.audit(p,'configure-harness',harness);
+   return {harness,revision:old.revision+1,configured:true,reused:false};
+  });
+ }
+ health(p){
+  const harnesses=this.permitted(p).map(r=>{
+   const config=JSON.parse(r.config_json),profile=JSON.parse(r.profile_json);let executable_error=null;
+   try{if(!existsSync(resolveExecutable(config)))executable_error='EXECUTABLE_NOT_FOUND';}catch(e){executable_error=e.code??'EXECUTABLE_RESOLUTION_FAILED';}
+   const age_s=r.last_scan===null?null:Math.max(0,(this.store.now()-r.last_scan)/1000);
+   return {harness:r.id,revision:r.revision,last_scan:r.last_scan===null?null:new Date(r.last_scan).toISOString(),age_s,stale:age_s===null||age_s>30||!!r.last_error,error:r.last_error,executable_error,profile_stale:this.store.now()-Date.parse(profile.observed_at)>profile.fresh_for_s*1000};
+  });return {healthy:harnesses.every(h=>!h.error&&!h.executable_error&&!h.stale),harnesses};
  }
  disable(endpoint){
   this.db.prepare('UPDATE endpoints SET active=0,revision=revision+1 WHERE id=? AND active=1').run(endpoint);
@@ -102,23 +132,25 @@ export class HarnessRegistry{
   }
   return {harnesses:observations};
  }
- async sessionPrincipal(p,sessionId,signal){
-  const own=this.row(p);await this.refresh(own.id,{signal});this.row(p);
+ async sessionPrincipal(p,sessionId,signal,{retained=false,reply=false}={}){
+  const own=this.row(p);let discovery_warning;try{await this.refresh(own.id,{signal});}catch(e){if(!retained||signal?.aborted)throw e;discovery_warning=e.code??'DISCOVERY_FAILED';}this.row(p);
   const source=this.db.prepare('SELECT s.endpoint FROM harness_sessions s JOIN endpoints e ON e.id=s.endpoint WHERE s.harness=? AND (s.native_id=? OR s.endpoint=?) AND e.active=1').get(own.id,sessionId,sessionId);
   check(source,'SESSION_NOT_DISCOVERED');
   const allowed=this.permitted(p).map(r=>r.id),targets=[];
-  for(const id of allowed){const row=this.db.prepare('SELECT last_scan,last_error FROM harnesses WHERE id=?').get(id);if(!row.last_error&&row.last_scan!==null&&this.store.now()-row.last_scan<=30000)targets.push(...this.db.prepare('SELECT s.endpoint FROM harness_sessions s JOIN endpoints e ON e.id=s.endpoint WHERE s.harness=? AND e.active=1').all(id).map(r=>r.endpoint));}
-  return {...p,id:source.endpoint,endpoint:source.endpoint,permissions:['send','claim','status','wake','discover'],scopes:{send:targets,claim:[source.endpoint],status:[source.endpoint],wake:[source.endpoint],discover:targets}};
+  for(const id of allowed){const row=this.db.prepare('SELECT last_scan,last_error FROM harnesses WHERE id=?').get(id);if(reply||!row.last_error&&row.last_scan!==null&&this.store.now()-row.last_scan<=30000)targets.push(...this.db.prepare('SELECT s.endpoint FROM harness_sessions s JOIN endpoints e ON e.id=s.endpoint WHERE s.harness=? AND e.active=1').all(id).map(r=>r.endpoint));}
+  return {...p,...(discovery_warning?{discovery_warning}:{}),id:source.endpoint,endpoint:source.endpoint,permissions:['send','claim','status','wake','discover'],scopes:{send:targets,claim:[source.endpoint],status:[source.endpoint],wake:[source.endpoint],discover:targets}};
  }
  async invoke(p,operation,{session_id,...args},signal){
   if(operation==='exchange'||operation==='wait'||operation==='listen')return this.inboxCall(p,operation,session_id,args,signal);
   // Never use a mutable connection-wide current-session value: clients may share one process.
-  if(['request','send','reply'].includes(operation))await this.discover(p,{},signal);
-  const principal=await this.sessionPrincipal(p,session_id,signal);
+  if(['request','send','reply','remote_prompt'].includes(operation))await this.discover(p,{},signal);
+  const retained=['claim','status','reply','complete','renew','release','requestStatus','unattend','worker_status','worker_wait','worker_ack'].includes(operation);
+  const principal=await this.sessionPrincipal(p,session_id,signal,{retained,reply:operation==='reply'});
   if(operation==='remote_prompt'){
    check(!signal?.aborted,'CANCELLED');
    const target=this.permitted(p).find(r=>r.id===args.harness);
    check(target,'HARNESS_NOT_REGISTERED_OR_PERMITTED');
+   check(!target.last_error&&target.last_scan!==null&&this.store.now()-target.last_scan<=30000,'TARGET_DISCOVERY_STALE:'+(target.last_error??'SCAN_REQUIRED'));
    check(this.store.workers,'WORKER_NOT_CONFIGURED');
    const {config,prompt}=remoteWorkConfig(target,args,this.store.workers.defaultDirectory);
    const job=this.store.workers.startConfigured(principal,{adapter:'remote:'+target.id,prompt,idempotency_key:args.idempotency_key},config);
@@ -126,7 +158,7 @@ export class HarnessRegistry{
   }
   if(['claim','status','attend','unattend','receive'].includes(operation))args.recipient=principal.endpoint;
   if(operation==='claim'||operation==='attend')args.handler_id=principal.endpoint;
-  if(['request','send'].includes(operation))check(principal.scopes.send.includes(args.recipient),'RECIPIENT_NOT_DISCOVERED_OR_PERMITTED');
+  if(['request','send'].includes(operation))this.checkRecipient(p,principal,args.recipient);
   let result;
   if(operation.startsWith('worker_')){check(this.store.workers,'WORKER_NOT_CONFIGURED');result=await this.store.workers[operation.slice(7)](principal,args);}
   else result=await this.store[operation](principal,args,signal);
@@ -134,15 +166,15 @@ export class HarnessRegistry{
    const recipient=operation==='reply'?result.recipient:args.recipient;
    try{result.native_notification=this.store.notifications?await this.store.notifications.dispatch(recipient):{status:'unconfigured'};}catch{result.native_notification={status:'uncertain'};}
   }
-  return Array.isArray(result)?{messages:result}:result;
+  return {...(Array.isArray(result)?{messages:result}:result),...(principal.discovery_warning?{discovery_warning:principal.discovery_warning,retained_identity:true}:{})};
  }
  async inboxCall(p,operation,session_id,args,signal){
   const timeout=args.timeout_ms??25000;
   check(Number.isInteger(timeout)&&timeout>=0&&timeout<=25000,'INVALID_TIMEOUT');
   if(operation==='exchange')await this.discover(p,{},signal);
-  const principal=await this.sessionPrincipal(p,session_id,signal),recipient=principal.endpoint;
+  const principal=await this.sessionPrincipal(p,session_id,signal,{retained:operation!=='exchange'}),recipient=principal.endpoint;
   check(!signal?.aborted,'CANCELLED');
-  if(operation==='exchange')check(principal.scopes.send.includes(args.recipient),'RECIPIENT_NOT_DISCOVERED_OR_PERMITTED');
+  if(operation==='exchange')this.checkRecipient(p,principal,args.recipient);
   const listen=operation==='listen';
   let attendance;
   if(listen&&args.attendance_token){
@@ -174,16 +206,23 @@ export class HarnessRegistry{
    }
    const result=await this.store.receive(principal,{...attendance,timeout_ms:timeout,limit:20,lease_s:300},signal);
    this.row(p);
-   return {...result,...(request?{request_id:request.id,request}:{}),notification_already_dispatched:attendance.notification_already_dispatched??false};
+   return {...result,...(principal.discovery_warning?{discovery_warning:principal.discovery_warning,retained_identity:true}:{}),...(request?{request_id:request.id,request}:{}),notification_already_dispatched:attendance.notification_already_dispatched??false};
   }finally{
    if(!keep)try{this.store.unattend(principal,attendance);}catch{/* Revocation or expiry already removed/fenced this lease. */}
   }
+ }
+ checkRecipient(p,principal,recipient){
+  if(principal.scopes.send.includes(recipient))return;
+  const session=this.db.prepare('SELECT harness FROM harness_sessions WHERE endpoint=?').get(recipient);
+  const target=session&&this.permitted(p).find(r=>r.id===session.harness);
+  if(target&&(target.last_error||target.last_scan===null||this.store.now()-target.last_scan>30000))throw new ServiceError('RECIPIENT_DISCOVERY_STALE:'+(target.last_error??'SCAN_REQUIRED'));
+  throw new ServiceError('RECIPIENT_NOT_DISCOVERED_OR_PERMITTED');
  }
  notificationFor(endpoint){
   const row=this.db.prepare('SELECT h.config_json,h.active AS harness_active,e.active,e.revision,s.native_id FROM harness_sessions s JOIN harnesses h ON h.id=s.harness JOIN endpoints e ON e.id=s.endpoint WHERE s.endpoint=?').get(endpoint);
   if(!row?.active||!row.harness_active)return;
   const c=JSON.parse(row.config_json),template=c.notification;if(!template?.enabled)return;
-  const common={...template,enabled:true,executable:c.executable,cwd:c.cwd,endpoint_revision:row.revision,persist:false,timeout_ms:Math.min(template.timeout_ms??30000,30000),max_output_bytes:65536,kill_grace_ms:250};
+  const common={...template,enabled:true,executable:resolveExecutable(c),cwd:c.cwd,endpoint_revision:row.revision,persist:false,timeout_ms:Math.min(template.timeout_ms??30000,30000),max_output_bytes:65536,kill_grace_ms:250};
   if(c.type==='codex')return {...common,type:'codex-queue',native_session_id:row.native_id,resume:false};
   // Discovery provides an exact native ID, not a title. A version-specific Claude route
   // must support that ID; a failed match stays pending rather than selecting another chat.

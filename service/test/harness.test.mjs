@@ -124,7 +124,7 @@ test('failed, duplicate or incomplete inventories never erase the last successfu
  const {r,a,inventory,store}=fixture(t);await r.discover(a);
  inventory.beta=[row('b1'),row('b1')];const result=await r.discover(a,{force:true});const beta=result.harnesses.find(h=>h.harness==='beta');
  assert.equal(beta.stale,true);assert.equal(beta.error,'INVALID_SESSION_INVENTORY');assert.equal(beta.sessions.length,1);
- await assert.rejects(r.invoke(a,'request',{session_id:'a1',recipient:sessionAddress('beta','b1'),body:'no',idempotency_key:'bad-scan'}),/RECIPIENT_NOT_DISCOVERED_OR_PERMITTED/);
+ await assert.rejects(r.invoke(a,'request',{session_id:'a1',recipient:sessionAddress('beta','b1'),body:'no',idempotency_key:'bad-scan'}),/RECIPIENT_DISCOVERY_STALE:INVALID_SESSION_INVENTORY/);
  assert.equal(store.pending(sessionAddress('beta','b1')),0);
 });
 test('unregister racing an inventory cannot resurrect sessions; relink requires a new registration',async t=>{
@@ -163,4 +163,47 @@ test('offline restore revokes harness credentials and discovery leases without d
  const r=source.harnesses;r.register(admin,{harness:'alpha',credential:'a'.repeat(43),discovery:{type:'codex',executable:'/native/codex',cwd:'/alpha'},profile,peers:[]});r.discoverNative=async()=>[row('a1')];await r.refresh('alpha');
  const info=await snapshot(file,saved);restore(saved,target,{sha256:info.sha256,recipients:['bootstrap',sessionAddress('alpha','a1')]});restored=new SharedStore(target,{recipients:['bootstrap']});
  assert.equal(restored.harnesses.authenticate('a'.repeat(43)),null);assert.equal(restored.db.prepare('SELECT active FROM harnesses WHERE id=?').get('alpha').active,0);assert.equal(restored.db.prepare('SELECT count(*) n FROM harness_scans').get().n,0);
+});
+
+
+test('operator config refresh preserves credentials, addresses and claims; races and stale revisions fail closed',async t=>{
+ const {store,r,a,b,inventory}=fixture(t);await r.discover(a);
+ const sent=await r.invoke(b,'request',{session_id:'b1',recipient:sessionAddress('alpha','a1'),body:'keep',idempotency_key:'keep'});
+ const [claim]=(await r.invoke(a,'claim',{session_id:'a1'})).messages;
+ const rowBefore=store.db.prepare('SELECT * FROM harnesses WHERE id=?').get('alpha');
+ const discovery={type:'codex',executable:'/new/codex',cwd:'/alpha'};
+ const update={harness:'alpha',expected_revision:1,discovery,profile:{...profile,native_version:'new',models:[{id:'new-model',access:'available',source:'native observation'}]}};
+ assert.throws(()=>r.configure(a,update),/FORBIDDEN/);
+ let release;r.discoverNative=()=>new Promise(resolve=>release=resolve);const scan=r.refresh('alpha',{force:true});
+ const changed=r.configure(admin,update);assert.equal(changed.revision,2);assert.ok(r.authenticate('a'.repeat(43)));assert.equal(r.active(a),true);
+ release(inventory.alpha);await assert.rejects(scan,/DISCOVERY_LEASE_EXPIRED|HARNESS_CHANGED_DURING_DISCOVERY/);
+ assert.equal(r.configure(admin,update).reused,true);
+ assert.throws(()=>r.configure(admin,{...update,discovery:{...discovery,executable:'/third/codex'}}),/REVISION_CONFLICT/);
+ const after=store.db.prepare('SELECT * FROM harnesses WHERE id=?').get('alpha');assert.equal(after.token_hash,rowBefore.token_hash);assert.equal(after.peers_json,rowBefore.peers_json);
+ r.discoverNative=async c=>inventory[c.cwd.slice(1)];
+ const result=await r.invoke(a,'reply',{session_id:'a1',id:claim.id,claim_token:claim.claim_token,generation:claim.generation,body:'preserved',idempotency_key:'preserved'});assert.equal(result.request_id,sent.id);
+ assert.equal(store.db.prepare('SELECT revision FROM endpoints WHERE id=?').get(sessionAddress('alpha','a1')).revision,1);
+ r.unregister(a);assert.equal(r.active(a),false);
+});
+
+test('failed own scan permits retained inbox and correlated replies, but never new identities or sends',async t=>{
+ const {store,r,a,b,inventory}=fixture(t);await r.discover(a);
+ const request=await r.invoke(b,'request',{session_id:'b1',recipient:sessionAddress('alpha','a1'),body:'read me',idempotency_key:'retained'});
+ r.discoverNative=async()=>{throw Object.assign(Error('DISCOVERY_START_FAILED'),{code:'DISCOVERY_START_FAILED'});};
+ await r.discover(a,{force:true});
+ const health=r.health(a);assert.equal(health.healthy,false);assert.equal(health.harnesses[0].error,'DISCOVERY_START_FAILED');
+ assert.equal((await r.invoke(a,'status',{session_id:'a1'})).retained_identity,true);
+ const claimed=await r.invoke(a,'claim',{session_id:'a1'});assert.equal(claimed.discovery_warning,'DISCOVERY_START_FAILED');const [msg]=claimed.messages;
+ await assert.rejects(r.invoke(a,'claim',{session_id:'invented'}),/SESSION_NOT_DISCOVERED/);
+ await assert.rejects(r.invoke(a,'claim',{session_id:'b1'}),/SESSION_NOT_DISCOVERED/);
+ await assert.rejects(r.invoke(a,'send',{session_id:'a1',recipient:sessionAddress('beta','b1'),body:'no',idempotency_key:'no'}),/DISCOVERY_START_FAILED/);
+ await assert.rejects(r.invoke(a,'reply',{session_id:'a2',id:msg.id,claim_token:msg.claim_token,generation:msg.generation,body:'wrong',idempotency_key:'wrong'}),/FORBIDDEN/);
+ const reply=await r.invoke(a,'reply',{session_id:'a1',id:msg.id,claim_token:msg.claim_token,generation:msg.generation,body:'answer',idempotency_key:'retained-answer'});assert.equal(reply.request_id,request.id);
+ const answers=await r.invoke(b,'claim',{session_id:'b1'});assert.equal(answers.messages[0].in_reply_to,request.id);
+ await r.invoke(b,'complete',{session_id:'b1',id:answers.messages[0].id,claim_token:answers.messages[0].claim_token,generation:answers.messages[0].generation,outcome:'received'});
+ assert.equal((await r.invoke(a,'wait',{session_id:'a1',timeout_ms:0})).retained_identity,true);
+ // A successful empty inventory disables retained identities; revocation remains decisive.
+ r.discoverNative=async c=>c.cwd==='/alpha'?[]:inventory.beta;await r.discover(a,{force:true});
+ await assert.rejects(r.invoke(a,'claim',{session_id:'a1'}),/SESSION_NOT_DISCOVERED/);
+ r.unregister(a);await assert.rejects(r.invoke(a,'status',{session_id:'a1'}),/FORBIDDEN/);
 });

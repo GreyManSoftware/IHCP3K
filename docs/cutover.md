@@ -2,7 +2,7 @@
 
 A **cutover** switches all connected clients from an old installation to its replacement. A **barrier** is an agreed stop point: every sender and receiver confirms it has stopped using the old installation. **Reconciliation** means checking what work actually happened before deciding whether a request can safely be retried. See [terminology](terminology.md) for the database and credential terms below.
 
-**v1.3.0.** This is a migration checklist, not an installation prerequisite. Native setup is an explicit operation; any actual execution denial must be respected without assuming it applies to unrelated setup paths. This checklist describes the required transition, not authorization to perform it or bypass a denial.
+**v1.4.0.** This is a migration checklist, not an installation prerequisite. Native setup is an explicit operation; any actual execution denial must be respected without assuming it applies to unrelated setup paths. This checklist describes the required transition, not authorization to perform it or bypass a denial.
 
 One coordinator owns the transition. Keep all identities, credentials, messages and evidence private. Multiple compatible stdio connections may share one database; an older exclusive HTTP writer or an independent second live database must not share its authority.
 

@@ -5,7 +5,7 @@ description: Set up, update, register, unregister or inspect IHCP3K; discover co
 
 # Harness interop
 
-Use IHCP3K **1.3.0**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
+Use IHCP3K **1.4.0**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
 
 ## Choose the communication route
 
@@ -39,7 +39,7 @@ Use the operator's one-time setup authority to register the harness, omitting `p
 
 Record installed versions, account/host scope, model and usage evidence/date, native discovery executable and working folder. Codex discovery uses read-only paginated `thread/list`; Claude uses `agents --json`. Only sessions exposed by those native interfaces are discoverable. Unknown/Copilot discovery is currently unsupported: explain the missing adapter rather than claiming setup succeeded. Never start/resume chats or read transcripts merely to discover sessions.
 
-Successful scans automatically add stable session addresses and disable missing ones. Failed/partial scans preserve the old inventory with stale/error flags and do not authorize new sending. Successful snapshots cache for 15 seconds; `/refresh` forces a new native listing. There is no model-based polling or hidden permanent discovery service.
+Successful scans automatically add stable session addresses and disable missing ones. Failed/partial scans preserve the old inventory with stale/error flags and do not authorize new work. Known active sources retain own-inbox and existing correlated-reply access with an explicit discovery warning; successful removal or revocation still denies access. Successful snapshots cache for 15 seconds; `/refresh` forces a new native listing. There is no model-based polling or hidden permanent discovery service.
 
 During setup, inspect the chosen installation before downloading. Compare its version with the latest published stable GitHub release; reuse verified local files or a verified cached ZIP when current or newer. Download only for a newer stable release or missing/damaged files. Do not downgrade or manually overwrite a running installation, private data or local modifications; use the managed update workflow for an existing runtime. If offline, reuse verified compatible files and report that update availability is unknown. Follow the current agent setup checklist over conflicting instructions in an older package.
 
@@ -126,3 +126,5 @@ Reference one maintained source for shared skills/agent definitions and project-
 Legacy `enroll`, `register-session` and per-session `directory.*` operations remain available only for compatibility; they are not steps in fresh installation. See [protocol](../../docs/protocol.md), [architecture](../../docs/architecture.md), [terminology](../../docs/terminology.md) and [validation](../../docs/validation.md). Report tested scope honestly and distinguish discovery from native end-to-end task delivery.
 
 Completed request identities expire after 90 days. A missing old request is not evidence that no effects occurred; do not automatically replay it. Database maintenance is deterministic and automatic; see [retention](../../docs/retention.md).
+
+See [native app updates and retained inboxes](../../docs/app-updates.md) for operator-pinned executable resolution, in-place configure/profile refresh, stale health and safe inbox access during failed discovery. Do not unregister or rotate credentials to repair a changed native executable.

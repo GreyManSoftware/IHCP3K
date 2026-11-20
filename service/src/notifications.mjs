@@ -8,7 +8,7 @@ export class Notifications {
    for(const recipient of [...new Set([...Object.keys(this.configs),...(this.store.harnesses?.notificationRecipients()??[])])].slice(0,100))this.start(recipient);
  }
  start(recipient){
-     const config=this.store.harnesses?.notificationFor(recipient)??this.configs[recipient];
+     let config;try{config=this.store.harnesses?.notificationFor(recipient)??this.configs[recipient];}catch(e){return {status:'unavailable',reason:e.code??'EXECUTABLE_RESOLUTION_FAILED'};}
      if(this.stopping||!config)return {status:'unconfigured'};
      if(this.active.has(recipient))return this.active.get(recipient);
      if(!this.store.pending(recipient))return {status:'no_pending_mail'};

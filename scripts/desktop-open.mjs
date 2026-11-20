@@ -1,3 +1,4 @@
+import {resolveExecutable} from '../service/src/trusted-executable.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {homedir} from 'node:os';
@@ -52,6 +53,7 @@ export function desktopOpener({runtimeFile,journalDir,tty=!!process.stdin.isTTY&
   const runtime=JSON.parse(fs.readFileSync(runtimeFile,'utf8'));
   const db=new DatabaseSync(runtime.database,{readOnly:true});let config;
   try{const h=db.prepare('SELECT config_json FROM harnesses WHERE id=? AND active=1').get(harness.harness);if(!h)return {status:'harness_unavailable'};config=JSON.parse(h.config_json);}finally{db.close();}
+  try{config={...config,executable:resolveExecutable(config)};}catch{return {status:'desktop_launcher_unavailable'};}
   if(config.type!=='claude'||!path.isAbsolute(config.executable)||!/^(claude|claude\.exe)$/i.test(path.basename(config.executable))||!path.isAbsolute(config.cwd))return {status:'desktop_launcher_unavailable'};
   const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>/^(PATH|PATHEXT|SYSTEMROOT|WINDIR|SYSTEMDRIVE|HOME|USERPROFILE|HOMEDRIVE|HOMEPATH|APPDATA|LOCALAPPDATA|TEMP|TMP|TMPDIR|LANG|LC_ALL)$/i.test(key)));
   const list=run(config.executable,['agents','--json'],{cwd:config.cwd,env,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:16*1024*1024});

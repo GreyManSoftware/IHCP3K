@@ -61,6 +61,14 @@ Setup now reuses verified local packages and keeps lifecycle/destructive tests o
 
 This page distinguishes automated tests from checks performed in real agent applications. A **fixture** is controlled test data or a simulated app response; a **rehearsal** exercises a specific real workflow. Neither proves compatibility with every app version. Technical terms are defined in [terminology](terminology.md).
 
+## Version 1.4.0: native app updates and retained inboxes
+
+The pinned Docker release suite passed **164 tests**: 94 service, 16 waiter, 32 command/update/resolution checks, 13 legacy import and 9 packaged installer checks. Existing tests were extended for revision-checked configuration, credential/claim/address preservation, real SDK operator permissions, retained inbox/reply access, stale-send rejection, native catalogue pagination and package-family resolution. No existing behavior checks were removed. The desktop-opener/update checks were also rerun directly after connecting the shared executable resolver (27 passed).
+
+A read-only Windows development check against Codex CLI `0.171.0-alpha.13` resolved the installed package family, discovered 129 non-archived native sessions and obtained 11 catalogue models using only initialization and paginated `model/list`. This establishes the installed interfaces, not model execution entitlement or closed-app delivery. The old versioned executable was absent. Live installation repair and native reconnection remain separate observations recorded privately after release.
+
+The build exposed a pre-existing cookie-signature lockfile entry naming unpublished 1.2.6; both locks now identify published 1.2.2, whose registry integrity matches the already-recorded hash. Dependency installation and bundling ran only in the pinned Docker environment.
+
 ## Version 1.2.1: automatic notifications
 
 The full suite passed **125 tests** (85 service, 16 legacy waiter, 3 queue/help, 13 legacy import, 8 installer); the eight packaged installer checks also passed on Windows after the version bump. Added coverage checks automatic Codex notification configuration, rejected incomplete Claude configuration, and unique UUID-to-native-registration resolution, including missing and duplicate bindings.

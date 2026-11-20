@@ -1,6 +1,6 @@
 # Agent setup and operation
 
-Install **IHCP3K 1.3.0** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
+Install **IHCP3K 1.4.0** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
 
 ## First install
 
@@ -139,3 +139,5 @@ For an unknown harness, implement and test a bounded read-only session-discovery
 ## Automatic retention
 
 Cleanup is enabled by default; do not ask another setup question or create an AI routine. See [retention](docs/retention.md) for the 90-day completed history, 30-day inactive session policy and storage limits.
+
+See [native app updates and retained inboxes](docs/app-updates.md) for operator-pinned executable resolution, in-place configure/profile refresh, stale health and safe inbox access during failed discovery. Do not unregister or rotate credentials to repair a changed native executable.

@@ -9,6 +9,7 @@ import {resolveTarget} from './resolve-target.mjs';
 import {desktopOpener} from './desktop-open.mjs';
 import {listenInbox} from './listen-inbox.mjs';
 import {update} from './update.mjs';
+import {observeNativeProfile} from '../service/src/native-profile.mjs';
 import {connect,call,exchange} from '../service/dist/client.mjs';
 const read=f=>JSON.parse(fs.readFileSync(f,'utf8').replace(/^\uFEFF/,''));
 const write=(f,v)=>fs.writeFileSync(f,JSON.stringify(v,null,2)+'\n',{mode:0o600});
@@ -58,6 +59,21 @@ export async function main(args=process.argv.slice(2)){
  const mode=parsed.mode==='unregister'?'unlink':parsed.mode;
  const [location,input,output,extra]=parsed.args;
  if(mode==='update')return update(location,{check:parsed.check});
+ if(mode==='configure'||mode==='profile'){
+   const dir=path.resolve(location),stateFile=path.join(dir,'harness.json'),requestFile=path.join(dir,'registration.json');
+   const state=read(stateFile),saved=read(requestFile),requested=read(input);
+   if(!state.linked)throw Error('HARNESS_UNREGISTERED');
+   if(!Object.keys(requested).every(k=>['expected_revision','discovery','profile','notification'].includes(k)))throw Error('INVALID_CONFIGURATION_FIELD');
+   let discovery=requested.discovery??saved.discovery;
+   let profile=requested.profile??saved.profile;
+   if(mode==='profile')profile=await observeNativeProfile(discovery,profile);
+   const notification=requested.notification??saved.notification;
+   const result=await withClient(saved.runtime_file,path.join(path.dirname(saved.runtime_file),'tokens','admin.tok'),c=>call(c,'harness.configure',{harness:saved.harness,expected_revision:requested.expected_revision,discovery,profile,...(notification?{notification}:{})}));
+   // Commit local retry evidence only after successful CAS. A lost response can be
+   // retried with the identical configure payload, without rotating the token.
+   write(requestFile,{...saved,discovery,profile,...(notification?{notification}:{})});write(stateFile,{...state,revision:result.revision});
+   return {...result,credentials_preserved:true};
+ }
  if(mode==='inspect'){
    return withClient(operatorLocation(location),path.join(path.dirname(location),'tokens','admin.tok'),c=>call(c,'directory.inspect',read(input)));
  }

@@ -10,7 +10,7 @@ Native references: [Codex configuration](https://developers.openai.com/codex/con
 
 An **adapter** connects IHCP3K to an app's own commands. A **notification adapter** tells an existing session that a message is waiting. A **task worker** starts a separate, time-limited session to do explicitly requested work. **Retention** controls how long a worker's chat history is kept. An **endpoint revision** is a registration version used to reject outdated target mappings. See [terminology](terminology.md) for configuration terms.
 
-**v1.3.0; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
+**v1.4.0; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
 
 A request to an existing session and a new worker are different operations. `remote_prompt` sends durable mail; the configured adapter notifies the existing target. `worker` explicitly creates a separately owned session to do a bounded task. Delivery failure must not silently substitute a worker or resumed session.
 
@@ -179,3 +179,5 @@ An operator may explicitly enable both Codex cleanup capabilities with `cleanup:
 Native cleanup requires a durable successful result, explicit result acknowledgement, verified child exit, exact owned worker identity and unchanged trusted configuration. Failed, running or uncertain jobs are retained for reconciliation. An acknowledged result does not by itself prove success or exit. Never clean up the requester/target chat, delete raw transcript files or purge a shared project.
 
 Observed child exit does not guarantee descendant/remote-work termination. Native command success does not prove disk/remote erasure or worktree safety. Protocol result retention, native history, artifacts, worktrees and backups are separate concerns. Cleanup can wait for the next startup; no scheduler is needed or silently installed.
+
+See [native app updates and retained inboxes](app-updates.md) for operator-pinned executable resolution, in-place configure/profile refresh, stale health and safe inbox access during failed discovery. Do not unregister or rotate credentials to repair a changed native executable.
