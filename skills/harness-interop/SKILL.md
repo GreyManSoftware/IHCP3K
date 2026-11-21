@@ -76,7 +76,9 @@ Renew claims only while working. Release unstarted work truthfully; reconcile po
 
 ### Questions while handling a request
 
-The caller owns the conversation with the user. While acting on an incoming IHCP3K request, send any question, clarification or decision you need back to the caller as the correlated `session.reply` to that request, stating exactly what you need and what you have done so far. Do not open your own question box, ask in your local chat, or silently wait for a local user answer. The caller asks the user and relays the answer as a new correlated request. If a native platform approval is required, keep it in force: report the exact pending action and where it can be approved to the caller, and never work around it. A relayed answer is the caller's report of the user's decision, not a native approval.
+The caller owns the conversation with the user. While acting on an incoming IHCP3K request, never block on a question box, permission prompt or decision only a local user can see. Instead, answer the request with `session.reply`, `outcome` set to `needs_decision` (the user must choose) or `needs_approval` (your own native permission system needs a local approval), and the JSON body from [decision and approval replies](../../docs/protocol.md#decision-and-approval-replies): the exact question, options with the recommended one first and what each would do, and what you have done so far. For `needs_approval`, name the exact pending step and where the user can approve it. Keep that approval in force and never work around it. Do not also ask in your local chat.
+
+As the caller, when a reply has one of these outcomes, put its question to the user through your own question tool, options in the order given, then send the answer as a new correlated request with the `decision.v1` body. Do not answer it yourself unless the user's earlier instructions already decide it. As the receiver of a `decision.v1` request, resume from its `context` and apply your normal permission rules: a relayed answer is the caller's report of the user's decision, not a native approval.
 
 ## One-off work without a destination session
 
