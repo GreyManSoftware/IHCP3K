@@ -10,7 +10,7 @@ Native references: [Codex configuration](https://developers.openai.com/codex/con
 
 An **adapter** connects IHCP3K to an app's own commands. A **notification adapter** tells an existing session that a message is waiting. A **task worker** starts a separate, time-limited session to do explicitly requested work. **Retention** controls how long a worker's chat history is kept. An **endpoint revision** is a registration version used to reject outdated target mappings. See [terminology](terminology.md) for configuration terms.
 
-**v1.4.0; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
+**v1.5.0; native coverage is listed in the validation report.** These adapters are used by the local stdio runtime. Docker/HTTP remains the separate v0.4 compatibility path.
 
 A request to an existing session and a new worker are different operations. `remote_prompt` sends durable mail; the configured adapter notifies the existing target. `worker` explicitly creates a separately owned session to do a bounded task. Delivery failure must not silently substitute a worker or resumed session.
 

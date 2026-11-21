@@ -63,5 +63,17 @@ test('notification reservations coalesce and respect attendance and endpoint rev
  await s.wait(p,{recipient:'a',timeout_ms:0});
  const discovered=s.directory.discover({id:'discover',permissions:['discover'],scopes:{discover:['a']}});
  assert.ok(discovered.entries[0].presence.waiter_last_seen);
- await Promise.all([notification.stop(),other.stop()]);
+ // A proven pre-launch failure can retry after the transport recovers. An
+ // ambiguous result must remain fenced, even after the same backoff interval.
+ let now=Date.now(),outcome={status:'not_dispatched',definitely_not_started:true};s.now=()=>now;
+ const recovery=new Notifications(s,{a:{endpoint_revision:1}},async()=>{sends++;return outcome;},()=>({status:'ready'}));
+ s.send(p,{recipient:'a',body:'recovery',idempotency_key:'recovery'});
+ assert.equal((await recovery.dispatch('a')).status,'not_dispatched');
+ assert.equal((await recovery.dispatch('a')).status,'retry_deferred');
+ const attempts=sends;now+=s.wakeGapMs;
+ outcome={status:'uncertain'};
+ assert.equal((await recovery.dispatch('a')).status,'uncertain');assert.equal(sends,attempts+1);
+ now+=s.wakeGapMs*2;outcome={status:'queued'};
+ assert.equal((await recovery.dispatch('a')).status,'uncertain');assert.equal(sends,attempts+1);assert.ok(s.pending('a'));
+ await Promise.all([notification.stop(),other.stop(),recovery.stop()]);
 });

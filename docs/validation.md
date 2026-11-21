@@ -61,6 +61,12 @@ Setup now reuses verified local packages and keeps lifecycle/destructive tests o
 
 This page distinguishes automated tests from checks performed in real agent applications. A **fixture** is controlled test data or a simulated app response; a **rehearsal** exercises a specific real workflow. Neither proves compatibility with every app version. Technical terms are defined in [terminology](terminology.md).
 
+## Version 1.5.0: notification recovery and automatic Codex model discovery
+
+The pinned Docker release suite passed **165 tests** (95 service, 16 waiter, 32 CLI/update/resolution, 13 legacy import, 9 packaged installer). Regression checks cover a child that returns the final page but never exits, a proven native launch failure versus ambiguous delivery, catalogue additions/removals, expiry and failed probes, shared probe fencing and operator configuration retries without local mirror writes. The managed-update checks cover interruption, rollback and reconnect reporting using fixtures.
+
+A read-only Windows probe against installed Codex CLI `0.171.0-alpha.13` resolved the registered Windows package, discovered 135 sessions, and read 11 advertised models including GPT-6.2 Sol. Model access stays advisory. Starting a second MCP client for verification does not establish that an already-running chat has reconnected.
+
 ## Version 1.4.0: native app updates and retained inboxes
 
 The pinned Docker release suite passed **164 tests**: 94 service, 16 waiter, 32 command/update/resolution checks, 13 legacy import and 9 packaged installer checks. Existing tests were extended for revision-checked configuration, credential/claim/address preservation, real SDK operator permissions, retained inbox/reply access, stale-send rejection, native catalogue pagination and package-family resolution. No existing behavior checks were removed. The desktop-opener/update checks were also rerun directly after connecting the shared executable resolver (27 passed).

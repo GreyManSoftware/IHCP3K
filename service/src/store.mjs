@@ -318,6 +318,7 @@ export class Store extends EventEmitter {
       if(this.attendance(recipient))return {recipient,reserved:false,state:'receiver_attending'};
       const row=this.db.prepare('SELECT * FROM wake_dispatch WHERE recipient=?').get(recipient);
       if(!this.pending(recipient) || row && row.state!=='idle')return {recipient,reserved:false,state:row?.state??'idle'};
+      if(row?.detail==='not_dispatched'&&this.now()-row.updated_at<this.wakeGapMs)return {recipient,reserved:false,state:'retry_deferred'};
       const token=randomUUID(),generation=(row?.generation??0)+1,now=this.now();
       this.db.prepare("INSERT INTO wake_dispatch VALUES(?,?,'reserved',?,?,?,NULL) ON CONFLICT(recipient) DO UPDATE SET generation=excluded.generation,state=excluded.state,token_hash=excluded.token_hash,deadline=excluded.deadline,updated_at=excluded.updated_at,detail=NULL").run(recipient,generation,hash(token),now+60000,now);
       return {recipient,reserved:true,generation,dispatch_token:token};
@@ -325,13 +326,14 @@ export class Store extends EventEmitter {
   }
   recordWake(principal,{recipient,generation,dispatch_token,result}) {
     this.scope(principal,'wake',recipient);
-    requireThat(['queued','uncertain'].includes(result),'INVALID_WAKE_RESULT');
+    requireThat(['queued','uncertain','not_dispatched'].includes(result),'INVALID_WAKE_RESULT');
     return this.transaction(()=>{
       const row=this.db.prepare('SELECT * FROM wake_dispatch WHERE recipient=?').get(recipient);
       requireThat(row && row.generation===generation && typeof dispatch_token==='string' && row.token_hash===hash(dispatch_token),'STALE_WAKE');
-      if(row.state===result)return {recipient,state:result,duplicate:true};
+      if(row.state===result||result==='not_dispatched'&&row.state==='idle'&&row.detail===result)return {recipient,state:result,duplicate:true};
       requireThat(row.state==='reserved' && row.deadline>this.now(),'STALE_WAKE');
-      this.db.prepare('UPDATE wake_dispatch SET state=?,deadline=NULL,updated_at=? WHERE recipient=?').run(result,this.now(),recipient);
+      const retry=result==='not_dispatched';
+      this.db.prepare('UPDATE wake_dispatch SET state=?,deadline=NULL,updated_at=?,detail=? WHERE recipient=?').run(retry?'idle':result,this.now(),retry?result:null,recipient);
       return {recipient,state:result};
     });
   }

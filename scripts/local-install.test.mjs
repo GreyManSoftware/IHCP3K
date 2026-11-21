@@ -168,9 +168,14 @@ test('bundled local install, strict reuse and explicit stdio CLI workflow',async
     const second=await cli(['register',runtimeFile,input,harnessDir]);assert.equal(second.reused,true);
     const originalToken=fs.readFileSync(path.join(harnessDir,'harness.tok'),'utf8');
     const details=read(input),updateFile=path.join(base,'configure.json');
+    const localFiles=['registration.json','harness.json'].map(name=>path.join(harnessDir,name));
+    const originalRecords=localFiles.map(file=>fs.readFileSync(file,'utf8'));
     details.profile.native_version='new-version';write(updateFile,{expected_revision:1,profile:details.profile});
     assert.equal((await cli(['configure',harnessDir,updateFile])).revision,2);
     assert.equal((await cli(['configure',harnessDir,updateFile])).reused,true);
+    assert.deepEqual(localFiles.map(file=>fs.readFileSync(file,'utf8')),originalRecords);
+    const current=await cli(['configuration',harnessDir]);assert.equal(current.revision,2);assert.equal(current.profile.native_version,'new-version');assert.equal(current.credential,undefined);
+    assert.equal((await cli(['register',runtimeFile,input,harnessDir])).reused,true);
     assert.equal(fs.readFileSync(path.join(harnessDir,'harness.tok'),'utf8'),originalToken);
     write(input,details);
     assert.equal(fs.existsSync(path.join(harnessDir,'session.tok')),false);assert.equal(fs.existsSync(path.join(harnessDir,'harness.tok')),true);

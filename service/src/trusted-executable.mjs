@@ -19,7 +19,10 @@ export function resolveExecutable(config,{platform=process.platform,queryPackage
  if(!queryPackages&&cached&&Date.now()-cached.at<15000&&exists(cached.executable))return cached.executable;
  const query=queryPackages??(()=>{
   const script="$ErrorActionPreference='Stop'; @(Get-AppxPackage | Where-Object { $_.PackageFamilyName -eq $env:IHCP_PACKAGE_FAMILY -and $_.Status -eq 'Ok' } | Select-Object PackageFamilyName,InstallLocation) | ConvertTo-Json -Compress";
-  const result=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',script],{windowsHide:true,shell:false,encoding:'utf8',timeout:5000,maxBuffer:1048576,env:{...process.env,IHCP_PACKAGE_FAMILY:r.package_family}});
+  const systemRoot=process.env.SystemRoot;
+  check(typeof systemRoot==='string'&&path.win32.isAbsolute(systemRoot),'EXECUTABLE_PACKAGE_QUERY_FAILED');
+  const powershell=path.win32.join(systemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe');
+  const result=spawnSync(powershell,['-NoProfile','-NonInteractive','-Command',script],{windowsHide:true,shell:false,encoding:'utf8',timeout:5000,maxBuffer:1048576,env:{...process.env,IHCP_PACKAGE_FAMILY:r.package_family}});
   check(!result.error&&result.status===0,'EXECUTABLE_PACKAGE_QUERY_FAILED');
   try{const value=JSON.parse(result.stdout||'[]');return Array.isArray(value)?value:[value];}catch{throw new ServiceError('EXECUTABLE_PACKAGE_QUERY_FAILED');}
  });

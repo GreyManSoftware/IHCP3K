@@ -163,7 +163,7 @@ function execute(command, {signal, spawnProcess=spawn}={}) {
   const empty = {output:'', stderr:'', truncated:false, exited:false, exit_code:null, termination_signal:null};
   if (signal?.aborted) return Promise.resolve({...empty, reason:'aborted_before_spawn'});
   return new Promise(resolve => {
-    let child, timer, grace, finalTimer, settled=false, exitSeen=false, stopReason, used=0, truncated=false;
+    let child, timer, grace, finalTimer, settled=false, exitSeen=false, spawned=false, stopReason, used=0, truncated=false;
     const stdout=[], stderr=[];
     const decoded = chunks => {
       const bytes = Buffer.concat(chunks);
@@ -205,15 +205,20 @@ function execute(command, {signal, spawnProcess=spawn}={}) {
       if (length < bytes.length) { truncated = true; stop('output_limit'); }
     };
     try { child = spawnProcess(command.executable, command.args, command.options); }
-    catch { done({reason:'spawn_failed'}); return; }
+    catch { done({reason:'spawn_failed',definitely_not_started:true}); return; }
     child.stdout?.on('data', capture(stdout));
     child.stderr?.on('data', capture(stderr));
+    child.on('spawn', () => { spawned = true; });
     child.on('exit', () => { exitSeen = true; });
     child.on('close', (code, termination_signal) => {
       exitSeen = true;
       done({exited:true, exit_code:code, termination_signal:termination_signal ?? null});
     });
-    child.on('error', () => stop('process_error'));
+    child.on('error', error => {
+      if (!spawned && ['ENOENT','EACCES','EPERM','ENOEXEC'].includes(error?.code)) {
+        done({reason:'spawn_failed',definitely_not_started:true});
+      } else stop('process_error');
+    });
     child.stdin?.on('error', () => stop('stdin_error'));
     timer = setTimeout(() => stop('timeout'), command.timeout_ms);
     signal?.addEventListener('abort', abort, {once:true});
@@ -291,12 +296,13 @@ export async function notifyNative(config, {recipient, signal, spawnProcess, cre
   if (config?.type === 'copilot-ahp') return notifyCopilotAhp(config, {recipient, signal, createWebSocket, readTokenFile});
   if(config?.type==='claude-message'&&config.binding_mode==='session-file') {
     const file=claudeSessionBinding(config.target?.stable_id,config.sessions_directory);
-    if(!file)return {...unsupported('native_session_binding_unavailable'),exited:false,output:'',stderr:'',truncated:false};
+    if(!file)return {...unsupported('native_session_binding_unavailable'),definitely_not_started:true,exited:false,output:'',stderr:'',truncated:false};
     config={...config,target:{...config.target,binding_file:file}};
   }
   const command = buildNativeCommand(config, 'notify', {recipient});
-  if (command.status !== 'ready') return {...command, exited:false, output:'', stderr:'', truncated:false};
+  if (command.status !== 'ready') return {...command, definitely_not_started:true, exited:false, output:'', stderr:'', truncated:false};
   const result = await execute(command, {signal, spawnProcess});
+  if (result.definitely_not_started || result.reason==='aborted_before_spawn') return {...result,status:'not_dispatched',definitely_not_started:true};
   if (config.type === 'claude-message') return {...result, status:'uncertain',
     reason:result.reason ?? 'target_receipt_unverified', target_receipt:null,
     worker_result:workerResult(config, command, result)};

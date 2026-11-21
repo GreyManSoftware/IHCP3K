@@ -1,6 +1,7 @@
 // CLI help is available before opening any runtime or credential file.
 export const commands = {
   update: ['<harness-dir> [--check]', 'Update the shared installation, skills and MCP connections; ask before any app restart. --check changes nothing.'],
+  configuration: ['<harness-dir>', 'Read the authoritative harness configuration and revision without returning credentials. Administrator operation.'],
   configure: ['<harness-dir> <config.json>', 'Operator-only in-place discovery/profile update with expected_revision; preserves credentials, peers and inboxes.'],
   profile: ['<harness-dir> <observation.json>', 'Observe native version/models and apply in place; JSON contains expected_revision and optional discovery override. No model work.'],
   enroll: ['<runtime.json> <grant.json> <new-code-file>', 'Create a one-use registration grant; administrator operation.'],

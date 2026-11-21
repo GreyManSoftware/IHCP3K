@@ -6,6 +6,7 @@ import {join} from 'node:path';
 import {snapshot,restore} from '../src/backup.mjs';
 import {SharedStore} from '../src/shared-store.mjs';
 import {sessionAddress} from '../src/harness-registry.mjs';
+import {NativeCatalogue} from '../src/native-catalogue.mjs';
 import {WorkerManager} from '../src/worker-manager.mjs';
 const admin={id:'admin',permissions:['registry']};
 const profile={label:'Synthetic',source:'test',observed_at:new Date().toISOString(),fresh_for_s:600,models:[],usage:[],wake:{type:'manual',lifetime:'test',closed_app:'unknown',human_fallback:'check'}};
@@ -206,4 +207,42 @@ test('failed own scan permits retained inbox and correlated replies, but never n
  r.discoverNative=async c=>c.cwd==='/alpha'?[]:inventory.beta;await r.discover(a,{force:true});
  await assert.rejects(r.invoke(a,'claim',{session_id:'a1'}),/SESSION_NOT_DISCOVERED/);
  r.unregister(a);await assert.rejects(r.invoke(a,'status',{session_id:'a1'}),/FORBIDDEN/);
+});
+
+
+test('native catalogue follows executable and entitlement changes, keeps last complete list on failure, and fences concurrent probes',async t=>{
+ const {store,r,a}=fixture(t);
+ let now=Date.now(),build='one',ids=['old','keep'],failure=false,probes=0,gate;
+ store.now=()=>now;
+ r.catalogue=new NativeCatalogue(store,{
+  identify:config=>({executable:config.executable,fingerprint:build}),
+  observe:async(config,base,options)=>{
+   probes++;
+   if(failure)throw Object.assign(Error('offline'),{code:'NATIVE_PROFILE_RPC_FAILED'});
+   if(gate)await gate;
+   return {...base,native_version:build,observed_at:options.now(),models:ids.map(id=>({id,access:'available',source:'fixture'}))};
+  }
+ });
+ const list=async()=> (await r.discover(a)).harnesses.find(h=>h.harness==='alpha');
+ assert.deepEqual((await list()).profile.models.map(m=>m.id),['old','keep']);
+ await list();assert.equal(probes,2); // Two permitted harnesses, one probe each.
+ const originalRevision=r.configuration(admin,'alpha').revision;
+ build='two';ids=['new','keep'];
+ const upgraded=await list();assert.deepEqual(upgraded.profile.models.map(m=>m.id),['new','keep']);assert.equal(upgraded.profile.native_version,'two');
+ assert.equal(r.configuration(admin,'alpha').revision,originalRevision);
+ build='three';failure=true;
+ const failed=await list();assert.deepEqual(failed.profile.models.map(m=>m.id),['new','keep']);assert.equal(failed.model_catalogue.error,'NATIVE_PROFILE_RPC_FAILED');
+ const attempted=probes;await list();assert.equal(probes,attempted);
+ now+=60000;failure=false;ids=[];
+ const empty=await list();assert.deepEqual(empty.profile.models,[]);assert.equal(empty.model_catalogue.stale,false);
+ now+=3600000;ids=['new-entitlement'];assert.deepEqual((await list()).profile.models.map(m=>m.id),ids);
+ build='four';let release;gate=new Promise(resolve=>release=resolve);
+ const row=store.db.prepare('SELECT * FROM harnesses WHERE id=?').get('alpha'),config=JSON.parse(row.config_json);
+ const active=r.catalogue.refresh(row,config);
+ const sameDatabase=new NativeCatalogue(store,{observe:()=>assert.fail('only the lease owner may probe'),identify:r.catalogue.identify});
+ await sameDatabase.refresh(row,config);
+ const current=r.configuration(admin,'alpha');
+ r.configure(admin,{harness:'alpha',expected_revision:current.revision,discovery:current.discovery,profile:{...current.profile,native_version:'operator replacement'}});
+ release();await active;
+ assert.equal(r.catalogue.profile(store.db.prepare('SELECT * FROM harnesses WHERE id=?').get('alpha')).native_version,'operator replacement');
 });

@@ -6,13 +6,14 @@ import {buildNativeCommand} from './native-adapters.mjs';
 import {remoteWorkConfig} from './remote-work.mjs';
 import {resolveExecutable} from './trusted-executable.mjs';
 import {existsSync} from 'node:fs';
+import {NativeCatalogue} from './native-catalogue.mjs';
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const check=(v,c)=>{if(!v)throw new ServiceError(c);};
 const validId=v=>typeof v==='string'&&/^[a-z][a-z0-9-]{0,63}$/.test(v);
 export const sessionAddress=(harness,id)=>'s-'+hash(harness+'\0'+id).slice(0,48);
 export class HarnessRegistry{
- constructor(store,{discover=discoverSessions}={}){
-  this.store=store;this.db=store.db;this.discoverNative=discover;this.inflight=new Map();
+ constructor(store,{discover=discoverSessions,catalogue}={}){
+  this.store=store;this.db=store.db;this.discoverNative=discover;this.inflight=new Map();this.catalogue=catalogue??new NativeCatalogue(store);
   this.db.exec(`CREATE TABLE IF NOT EXISTS harnesses(id TEXT PRIMARY KEY,revision INTEGER NOT NULL,active INTEGER NOT NULL,token_hash TEXT NOT NULL,config_json TEXT NOT NULL,profile_json TEXT NOT NULL,peers_json TEXT NOT NULL,last_scan INTEGER,last_error TEXT);
    CREATE TABLE IF NOT EXISTS harness_sessions(endpoint TEXT PRIMARY KEY REFERENCES endpoints(id),harness TEXT NOT NULL REFERENCES harnesses(id),native_id TEXT NOT NULL,label TEXT NOT NULL,cwd TEXT,state TEXT NOT NULL,seen_at INTEGER NOT NULL,UNIQUE(harness,native_id));
    CREATE TABLE IF NOT EXISTS harness_scans(harness TEXT PRIMARY KEY,token TEXT NOT NULL,deadline INTEGER NOT NULL);`);
@@ -47,6 +48,13 @@ export class HarnessRegistry{
    this.store.directory.audit(p,'register-harness',harness);return {harness,revision,registered:true,reused:false};
   });
  }
+ configuration(p,harness){
+  check(p.permissions.includes('registry'),'FORBIDDEN');
+  const row=this.db.prepare('SELECT * FROM harnesses WHERE id=? AND active=1').get(harness);
+  check(row,'HARNESS_UNREGISTERED');
+  const {notification,...discovery}=JSON.parse(row.config_json);
+  return {harness,revision:row.revision,discovery,notification,profile:JSON.parse(row.profile_json),peers:JSON.parse(row.peers_json)};
+ }
  configure(p,{harness,expected_revision,discovery,profile,notification}){
   check(p.permissions.includes('registry'),'FORBIDDEN');validateDiscovery(discovery);this.store.directory.validateProfile(profile);
   return this.store.transaction(()=>{
@@ -63,16 +71,17 @@ export class HarnessRegistry{
    this.db.prepare('UPDATE harnesses SET config_json=?,profile_json=?,revision=revision+1,last_scan=NULL,last_error=NULL WHERE id=?').run(config,snapshot,harness);
    this.db.prepare('UPDATE endpoints SET profile_json=? WHERE harness=?').run(snapshot,harness);
    this.db.prepare('DELETE FROM harness_scans WHERE harness=?').run(harness);
+   this.catalogue.remove(harness);
    this.store.directory.audit(p,'configure-harness',harness);
    return {harness,revision:old.revision+1,configured:true,reused:false};
   });
  }
  health(p){
   const harnesses=this.permitted(p).map(r=>{
-   const config=JSON.parse(r.config_json),profile=JSON.parse(r.profile_json);let executable_error=null;
+   const config=JSON.parse(r.config_json),profile=this.catalogue.profile(r);let executable_error=null;
    try{if(!existsSync(resolveExecutable(config)))executable_error='EXECUTABLE_NOT_FOUND';}catch(e){executable_error=e.code??'EXECUTABLE_RESOLUTION_FAILED';}
    const age_s=r.last_scan===null?null:Math.max(0,(this.store.now()-r.last_scan)/1000);
-   return {harness:r.id,revision:r.revision,last_scan:r.last_scan===null?null:new Date(r.last_scan).toISOString(),age_s,stale:age_s===null||age_s>30||!!r.last_error,error:r.last_error,executable_error,profile_stale:this.store.now()-Date.parse(profile.observed_at)>profile.fresh_for_s*1000};
+   return {harness:r.id,revision:r.revision,last_scan:r.last_scan===null?null:new Date(r.last_scan).toISOString(),age_s,stale:age_s===null||age_s>30||!!r.last_error,error:r.last_error,executable_error,...(config.type==='codex'?{model_catalogue:this.catalogue.status(r)}:{}),profile_stale:this.store.now()-Date.parse(profile.observed_at)>profile.fresh_for_s*1000};
   });return {healthy:harnesses.every(h=>!h.error&&!h.executable_error&&!h.stale),harnesses};
  }
  disable(endpoint){
@@ -119,15 +128,22 @@ export class HarnessRegistry{
   })();this.inflight.set(harness,task);try{return await task;}finally{this.inflight.delete(harness);try{this.store.transaction(()=>this.db.prepare('DELETE FROM harness_scans WHERE harness=? AND token=?').run(harness,scanToken));}catch{/* Expired leases are collected on the next maintenance pass. */}}
  }
  permitted(p){const own=this.row(p),peers=JSON.parse(own.peers_json);return this.db.prepare('SELECT * FROM harnesses WHERE active=1 ORDER BY id').all().filter(r=>r.id===own.id||(peers.includes('*')||peers.includes(r.id))&&(JSON.parse(r.peers_json).includes('*')||JSON.parse(r.peers_json).includes(own.id)));}
- async discover(p,{force=false}={},signal){
+ async discover(p,{force=false,models=true}={},signal){
   const allowed=this.permitted(p);const observations=[];
   signal=AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(30000)]);
   // Discovery is demand-driven, bounded and does not invoke a model.
   for(const r of allowed){try{await this.refresh(r.id,{force,signal});}catch{} }
+  if(models&&!signal.aborted){
+   // Model observation must not delay or invalidate session routing on sends.
+   for(const row of this.permitted(p)){
+    try{await this.catalogue.refresh(row,JSON.parse(row.config_json),{force,signal});}catch{/* Preserve the last complete catalogue. */}
+   }
+  }
   this.row(p);
   for(const r of this.permitted(p)){
    const current=this.db.prepare('SELECT * FROM harnesses WHERE id=?').get(r.id);
-   observations.push({harness:r.id,type:JSON.parse(r.config_json).type,profile:JSON.parse(r.profile_json),last_scan:current.last_scan?new Date(current.last_scan).toISOString():null,error:current.last_error,stale:!!current.last_error||current.last_scan===null||this.store.now()-current.last_scan>30000,
+   const type=JSON.parse(current.config_json).type;
+   observations.push({harness:r.id,type,profile:this.catalogue.profile(current),...(type==='codex'?{model_catalogue:this.catalogue.status(current)}:{}),last_scan:current.last_scan?new Date(current.last_scan).toISOString():null,error:current.last_error,stale:!!current.last_error||current.last_scan===null||this.store.now()-current.last_scan>30000,
     sessions:this.db.prepare('SELECT s.endpoint,s.native_id,s.label,s.cwd,s.state FROM harness_sessions s JOIN endpoints e ON e.id=s.endpoint WHERE s.harness=? AND e.active=1 ORDER BY s.label,s.endpoint').all(r.id)});
   }
   return {harnesses:observations};
@@ -143,7 +159,7 @@ export class HarnessRegistry{
  async invoke(p,operation,{session_id,...args},signal){
   if(operation==='exchange'||operation==='wait'||operation==='listen')return this.inboxCall(p,operation,session_id,args,signal);
   // Never use a mutable connection-wide current-session value: clients may share one process.
-  if(['request','send','reply','remote_prompt'].includes(operation))await this.discover(p,{},signal);
+  if(['request','send','reply','remote_prompt'].includes(operation))await this.discover(p,{models:false},signal);
   const retained=['claim','status','reply','complete','renew','release','requestStatus','unattend','worker_status','worker_wait','worker_ack'].includes(operation);
   const principal=await this.sessionPrincipal(p,session_id,signal,{retained,reply:operation==='reply'});
   if(operation==='remote_prompt'){
@@ -171,7 +187,7 @@ export class HarnessRegistry{
  async inboxCall(p,operation,session_id,args,signal){
   const timeout=args.timeout_ms??25000;
   check(Number.isInteger(timeout)&&timeout>=0&&timeout<=25000,'INVALID_TIMEOUT');
-  if(operation==='exchange')await this.discover(p,{},signal);
+  if(operation==='exchange')await this.discover(p,{models:false},signal);
   const principal=await this.sessionPrincipal(p,session_id,signal,{retained:operation!=='exchange'}),recipient=principal.endpoint;
   check(!signal?.aborted,'CANCELLED');
   if(operation==='exchange')this.checkRecipient(p,principal,args.recipient);
@@ -235,6 +251,7 @@ export class HarnessRegistry{
    this.row(p);const sessions=this.db.prepare('SELECT endpoint FROM harness_sessions WHERE harness=?').all(row.id);
    for(const s of sessions)this.disable(s.endpoint);
    this.db.prepare('UPDATE harnesses SET active=0,revision=revision+1,last_error=NULL WHERE id=?').run(row.id);
+   this.catalogue.remove(row.id);
    this.store.directory.audit(p,'unregister-harness',row.id);return {harness:row.id,registered:false,sessions_revoked:sessions.length};
   });
  }

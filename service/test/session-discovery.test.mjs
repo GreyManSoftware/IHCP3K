@@ -28,7 +28,7 @@ test('bad pagination, RPC errors, unsupported adapters and timeouts fail without
   const {process}=processFixture(req=>req.id===1?{id:1,result:{}}:req.id?{id:req.id,...reply}:null);
   await assert.rejects(discoverSessions(config,{spawnProcess:()=>process}),/DISCOVERY_RPC_FAILED|DISCOVERY_INVALID_CURSOR/);
  }
- const {process}=processFixture(()=>null);await assert.rejects(discoverSessions({...config,timeout_ms:100},{spawnProcess:()=>process}),/DISCOVERY_TIMEOUT/);
+ const {process}=processFixture(()=>null);process.kill=()=>{};await assert.rejects(discoverSessions({...config,timeout_ms:100},{spawnProcess:()=>process}),/DISCOVERY_TIMEOUT/);
  for(const bad of [{type:'copilot'},{executable:'relative'},{executable:'/native/unsafe.cmd'},{timeout_ms:999999}])assert.throws(()=>validateDiscovery({...config,...bad}),/DISCOVERY/);
 });
 
@@ -53,5 +53,9 @@ test('native profile uses only version and paginated catalogue, preserving separ
  await assert.rejects(observeNativeProfile(config,previous,{runVersion:()=>({status:1})}),/NATIVE_VERSION_UNAVAILABLE/);
  const {process:broken}=processFixture(req=>req.id?{id:req.id,error:{code:1}}:null);
  await assert.rejects(observeNativeProfile(config,previous,{spawnProcess:()=>broken,runVersion:()=>({status:0,stdout:'codex 3'})}),/NATIVE_PROFILE_RPC_FAILED/);
+ const {process:stuck}=processFixture(req=>req.id===1?{id:1,result:{}}:req.id===2?{id:2,result:{data:[{id:'partial'}],nextCursor:null}}:null);
+ let killed=0;stuck.stdin.end=()=>{};stuck.kill=()=>{killed++;}; // No close event, even after termination.
+ await assert.rejects(observeNativeProfile({...config,timeout_ms:100},previous,{spawnProcess:()=>stuck,runVersion:()=>({status:0,stdout:'codex 3'})}),/NATIVE_PROFILE_TIMEOUT/);
+ assert.equal(killed,1);
  const claude=await observeNativeProfile({...config,type:'claude'},{models:[{id:'old',access:'available'}],usage:[]},{runVersion:()=>({status:0,stdout:'claude 2'})});assert.equal(claude.models[0].access,'unknown');
 });

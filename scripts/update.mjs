@@ -53,7 +53,7 @@ async function getPackage(info,cache,options){
 export async function verifyRuntime(runtimeFile,harnessDir){
  const runtime=read(runtimeFile),{connect}=await import(pathToFileURL(runtime.client_bundle).href+'?version='+runtime.version);
  const c=await connect({runtimeFile,tokenFile:path.join(harnessDir,'harness.tok')});
- try{const tools=(await c.listTools()).tools.map(t=>t.name);if(c.getServerVersion()?.version!==runtime.version||!tools.includes('harness.discover')||!tools.includes('session.exchange')||!tools.includes('harness.health'))throw Error('UPDATED_MCP_HEALTH_FAILED');const health=await c.callTool({name:'harness.health',arguments:{}});if(health.isError||health.structuredContent?.version!==runtime.version)throw Error('UPDATED_MCP_HEALTH_FAILED');return {version:runtime.version,tools:tools.length};}finally{await c.close();}
+ try{const tools=(await c.listTools()).tools.map(t=>t.name);if(c.getServerVersion()?.version!==runtime.version||!tools.includes('harness.discover')||!tools.includes('session.exchange')||!tools.includes('harness.health'))throw Error('UPDATED_MCP_HEALTH_FAILED');const health=await c.callTool({name:'harness.health',arguments:{}});if(health.isError||health.structuredContent?.version!==runtime.version)throw Error('UPDATED_MCP_HEALTH_FAILED');return {version:runtime.version,tools:tools.length,connection:'fresh_client'};}finally{await c.close();}
 }
 function rollback(state,root){
  const {txn,files}=state;within(path.join(root,'data','updates'),txn);let conflict=false;

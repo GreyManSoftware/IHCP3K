@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
-import {randomBytes,createHash} from 'node:crypto';
+import {randomBytes,createHash,randomUUID} from 'node:crypto';
+import {isDeepStrictEqual} from 'node:util';
 import {spawnSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {parseInvocation} from './usage.mjs';
@@ -10,9 +11,16 @@ import {desktopOpener} from './desktop-open.mjs';
 import {listenInbox} from './listen-inbox.mjs';
 import {update} from './update.mjs';
 import {observeNativeProfile} from '../service/src/native-profile.mjs';
+import {validateDiscovery} from '../service/src/session-discovery.mjs';
 import {connect,call,exchange} from '../service/dist/client.mjs';
 const read=f=>JSON.parse(fs.readFileSync(f,'utf8').replace(/^\uFEFF/,''));
-const write=(f,v)=>fs.writeFileSync(f,JSON.stringify(v,null,2)+'\n',{mode:0o600});
+function write(file,value){
+ const staging=file+'.'+randomUUID()+'.tmp';
+ try{
+  fs.writeFileSync(staging,JSON.stringify(value,null,2)+'\n',{flag:'wx',mode:0o600,flush:true});
+  fs.renameSync(staging,file);
+ }finally{if(fs.existsSync(staging))fs.unlinkSync(staging);}
+}
 function privateDir(dir){
  fs.mkdirSync(dir,{mode:0o700});
  if(process.platform==='win32'){
@@ -59,20 +67,28 @@ export async function main(args=process.argv.slice(2)){
  const mode=parsed.mode==='unregister'?'unlink':parsed.mode;
  const [location,input,output,extra]=parsed.args;
  if(mode==='update')return update(location,{check:parsed.check});
- if(mode==='configure'||mode==='profile'){
-   const dir=path.resolve(location),stateFile=path.join(dir,'harness.json'),requestFile=path.join(dir,'registration.json');
-   const state=read(stateFile),saved=read(requestFile),requested=read(input);
+ if(['configuration','configure','profile'].includes(mode)){
+   const state=read(path.join(path.resolve(location),'harness.json'));
    if(!state.linked)throw Error('HARNESS_UNREGISTERED');
-   if(!Object.keys(requested).every(k=>['expected_revision','discovery','profile','notification'].includes(k)))throw Error('INVALID_CONFIGURATION_FIELD');
-   let discovery=requested.discovery??saved.discovery;
-   let profile=requested.profile??saved.profile;
-   if(mode==='profile')profile=await observeNativeProfile(discovery,profile);
-   const notification=requested.notification??saved.notification;
-   const result=await withClient(saved.runtime_file,path.join(path.dirname(saved.runtime_file),'tokens','admin.tok'),c=>call(c,'harness.configure',{harness:saved.harness,expected_revision:requested.expected_revision,discovery,profile,...(notification?{notification}:{})}));
-   // Commit local retry evidence only after successful CAS. A lost response can be
-   // retried with the identical configure payload, without rotating the token.
-   write(requestFile,{...saved,discovery,profile,...(notification?{notification}:{})});write(stateFile,{...state,revision:result.revision});
-   return {...result,credentials_preserved:true};
+   return withClient(state.runtime_file,path.join(path.dirname(state.runtime_file),'tokens','admin.tok'),async client=>{
+    const current=await call(client,'harness.configuration',{harness:state.harness});
+    if(mode==='configuration')return current;
+    const requested=read(input);
+    if(!Object.keys(requested).every(k=>['expected_revision','discovery','profile','notification'].includes(k)))throw Error('INVALID_CONFIGURATION_FIELD');
+    const discovery=requested.discovery??current.discovery;
+    let profile=requested.profile??current.profile;
+    const notification=requested.notification??current.notification;
+    // A model observation is new work, not a retry of yesterday's snapshot.
+    // Re-read the authoritative revision before starting it.
+    if(mode==='profile'){
+     if(requested.expected_revision!==current.revision)throw Error('HARNESS_REVISION_CONFLICT');
+     validateDiscovery(discovery);
+     if(discovery.type!==current.discovery.type)throw Error('HARNESS_TYPE_CHANGE_REQUIRES_RELINK');
+     profile=await observeNativeProfile(discovery,profile);
+    }
+    const result=await call(client,'harness.configure',{harness:state.harness,expected_revision:requested.expected_revision,discovery,profile,notification});
+    return {...result,credentials_preserved:true};
+   });
  }
  if(mode==='inspect'){
    return withClient(operatorLocation(location),path.join(path.dirname(location),'tokens','admin.tok'),c=>call(c,'directory.inspect',read(input)));
@@ -96,18 +112,31 @@ export async function main(args=process.argv.slice(2)){
      privateDir(dir);request={...details,runtime_file:path.resolve(location),credential:randomBytes(32).toString('base64url')};
      write(requestFile,request);fs.writeFileSync(path.join(dir,'harness.tok'),request.credential+'\n',{flag:'wx',mode:0o600});
    }else{
-     request=read(requestFile);const {credential,runtime_file,...saved}=request;
-     if(runtime_file!==path.resolve(location)||JSON.stringify(saved)!==JSON.stringify(details))throw Error('REGISTRATION_RETRY_MISMATCH');
+     request=read(requestFile);const {runtime_file}=request;
+     if(runtime_file!==path.resolve(location)||request.harness!==details.harness)throw Error('REGISTRATION_RETRY_MISMATCH');
      const stateFile=path.join(dir,'harness.json'),state=fs.existsSync(stateFile)?read(stateFile):null;
      if(state?.linked===false&&!state.registration_pending){
-       request={...request,credential:randomBytes(32).toString('base64url')};write(requestFile,request);
+       request={...details,runtime_file,credential:randomBytes(32).toString('base64url')};write(requestFile,request);
        fs.writeFileSync(path.join(dir,'harness.tok'),request.credential+'\n',{mode:0o600});
        write(stateFile,{...state,registration_pending:true});
      }
 
    }
-   const {runtime_file,...payload}=request;
-   const result=await withClient(operatorLocation(location),path.join(path.dirname(location),'tokens','admin.tok'),c=>call(c,'harness.register',payload));
+   const {runtime_file,credential,...saved}=request;
+   const result=await withClient(operatorLocation(location),path.join(path.dirname(location),'tokens','admin.tok'),async client=>{
+    const matching=isDeepStrictEqual(saved,details);
+    let current;
+    try{current=await call(client,'harness.configuration',{harness:details.harness});}
+    catch(e){if(!['HARNESS_UNREGISTERED','MCP_TOOL_FAILED'].includes(e.message))throw e;}
+    if(current){
+     const {revision,...authoritative}=current;
+     const normalized={...details,notification:details.notification??(details.discovery?.type==='codex'?{enabled:true,type:'codex-queue'}:undefined),peers:details.peers??['*']};
+     if(!matching&&!isDeepStrictEqual(normalized,authoritative))throw Error('REGISTRATION_RETRY_MISMATCH');
+     return call(client,'harness.register',{...authoritative,credential});
+    }
+    if(!matching)throw Error('REGISTRATION_RETRY_MISMATCH');
+    return call(client,'harness.register',{...saved,credential});
+   });
    write(path.join(dir,'harness.json'),{...result,runtime_file,linked:true});
    return {...result,harness_dir:dir,mcp:{command:process.execPath,args:[read(location).bundle,runtime_file,path.join(dir,'harness.tok')]}};
  }

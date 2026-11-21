@@ -29,9 +29,16 @@ export function discoverSessions(config,{spawnProcess=spawn,signal}={}){
  return new Promise((resolve,reject)=>{
   const args=c.type==='claude'?['agents','--json']:c.transport==='proxy'?['app-server','proxy']:['app-server','--stdio'];
   const env={...process.env};delete env.NODE_OPTIONS;delete env.NODE_PATH;
-  let child,buffer='',stdout='',bytes=0,result,error,closed=false,seq=1,cursor=null;const rows=[],cursors=new Set();
-  let timer,killTimer;
-  const finishError=code=>{if(error||closed)return;error=new ServiceError(code);child?.stdin?.end();child?.kill();killTimer=setTimeout(()=>child?.kill('SIGKILL'),250);killTimer.unref?.();};
+  let child,buffer='',stdout='',bytes=0,result,error,closed=false,exited=false,seq=1,cursor=null;const rows=[],cursors=new Set();
+  let timer;
+  const cleanup=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);};
+  const finishError=code=>{
+   if(error||closed)return;
+   error=new ServiceError(code);cleanup();
+   if(!exited)try{child?.kill('SIGKILL');}catch{/* Preserve the scan failure. */}
+   for(const stream of [child?.stdin,child?.stdout,child?.stderr])stream?.destroy?.();
+   reject(error);
+  };
   const send=m=>{if(!error&&!closed)child.stdin.write(JSON.stringify(m)+'\n');};
   const list=()=>send({id:++seq,method:'thread/list',params:{limit:100,cursor,archived:false,useStateDbOnly:true,modelProviders:[],sourceKinds:['cli','vscode','exec','appServer','subAgent','subAgentReview','subAgentCompact','subAgentThreadSpawn','subAgentOther','unknown']}});
   const abort=()=>finishError('DISCOVERY_CANCELLED');
@@ -40,9 +47,12 @@ export function discoverSessions(config,{spawnProcess=spawn,signal}={}){
   catch{reject(new ServiceError('DISCOVERY_START_FAILED'));return;}
   timer=setTimeout(()=>finishError('DISCOVERY_TIMEOUT'),c.timeout_ms??15000);
   signal?.addEventListener('abort',abort,{once:true});
+  child.on('spawn',()=>{if(error&&!exited)try{child.kill('SIGKILL');}catch{/* Best effort. */}});
+  child.on('exit',()=>{exited=true;});
   child.on('error',()=>finishError('DISCOVERY_START_FAILED'));child.stdin.on('error',()=>finishError('DISCOVERY_WRITE_FAILED'));
   child.stderr.on('data',d=>{bytes+=d.length;if(bytes>16*1024*1024)finishError('DISCOVERY_OUTPUT_LIMIT');});
   child.stdout.on('data',d=>{
+   if(error||closed)return;
    bytes+=d.length;if(bytes>16*1024*1024){finishError('DISCOVERY_OUTPUT_LIMIT');return;}
    if(c.type==='claude'){stdout+=d;return;}
    buffer+=d;for(let n;(n=buffer.indexOf('\n'))>=0;){const line=buffer.slice(0,n);buffer=buffer.slice(n+1);if(!line.trim())continue;
@@ -62,11 +72,13 @@ export function discoverSessions(config,{spawnProcess=spawn,signal}={}){
    }
   });
   child.on('close',(code)=>{
-   closed=true;clearTimeout(timer);clearTimeout(killTimer);signal?.removeEventListener('abort',abort);
+   closed=true;cleanup();
    if(error){reject(error);return;}if(code!==0){reject(new ServiceError('DISCOVERY_EXIT_FAILED'));return;}
    try{if(c.type==='claude')result=normalizeSessions('claude',JSON.parse(stdout),max);check(result!==undefined,'DISCOVERY_INCOMPLETE');resolve(result);}
    catch(e){reject(e instanceof ServiceError?e:new ServiceError('DISCOVERY_INVALID_OUTPUT'));}
   });
-  if(c.type==='codex')send({id:1,method:'initialize',params:{clientInfo:{name:'ihcp3k_discovery',version:'1.4.0'}}});else child.stdin.end();
+  if(signal?.aborted){abort();return;}
+  try{if(c.type==='codex')send({id:1,method:'initialize',params:{clientInfo:{name:'ihcp3k_discovery',version:'1.5.0'}}});else child.stdin.end();}
+  catch{finishError('DISCOVERY_WRITE_FAILED');}
  });
 }

@@ -1,6 +1,6 @@
 # Agent setup and operation
 
-Install **IHCP3K 1.4.0** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
+Install **IHCP3K 1.5.0** by registering each harness once. A harness is an agent application and its local account/profile, such as this Codex installation. Native sessions are discovered automatically; do not ask users to enrol every chat.
 
 ## First install
 
@@ -32,6 +32,8 @@ The supported automatic discovery adapters are:
 - **Other harnesses:** automatic discovery is not yet implemented. Report the missing adapter; do not present manual per-session registration as a successful harness-wide install. Copilot's earlier experimental notification code does not establish discovery support.
 
 For a named Claude Desktop chat absent from live discovery, run the skill’s `resolve` workflow with a host-provided PTY. It automatically opens an exact existing non-archived local chat through the registered CLI, verifies discovery, then sends the request. If metadata cannot identify the target, an existing desktop chat can perform native lookup/wake; with none running, the resolver can first open one verified existing local chat. No designated PA or new persistent relay is needed. Do not ask the user to open a chat or run commands when these supported routes are available. See [native adapters](docs/native-adapters.md#unloaded-claude-desktop-targets).
+
+For Windows Store Codex, use the verified Windows package family and relative native executable as described in [native app updates](docs/app-updates.md). That binding follows routine package version changes. Codex refreshes advertised models from its native API on use, without re-registration.
 
 Prepare a private configuration (replace every placeholder):
 

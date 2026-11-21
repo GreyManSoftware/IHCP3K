@@ -37,13 +37,13 @@ function fixture(t){
  const config=path.join(home,'.codex','config.toml'),args=[r.bundle,path.join(data,'runtime.json'),path.join(dir,'harness.tok')];
  write(config,'# keep comments\napproval_policy = "never"\n[mcp_servers.ihcp3k]\ncommand = "node"\nargs = '+JSON.stringify(args)+'\n[mcp_servers.other]\ncommand="other"\n');
  const skill=path.join(home,'.agents','skills','harness-interop','SKILL.md');write(skill,'skill 1.2.3');
- const db=new DatabaseSync(r.database);db.exec("pragma user_version=6;create table metadata(key text,value text);insert into metadata values('writer_version','6'),('service_id','test');create table workers(state text);create table preserved(value text);insert into preserved values('keep');");db.close();
+ const db=new DatabaseSync(r.database);db.exec("pragma user_version=6;create table metadata(key text,value text);insert into metadata values('writer_version','6'),('service_id','test');create table workers(state text);create table preserved(value text);insert into preserved values('keep');create table harnesses(id text,active integer,config_json text);");db.prepare('INSERT INTO harnesses VALUES(?,?,?)').run('codex',1,JSON.stringify({type:'codex',executable:'/current/codex'}));db.close();
  const urls=new Map();for(const [v,p] of [['1.2.3',old],['1.2.4',next]]){
   const url='https://github.com/GreyManSoftware/IHCP3K/releases/download/v'+v+'/IHCP3K-'+v+'.zip';
   urls.set(url,p.bytes);urls.set(url+'.sha256',hash(p.bytes)+'  IHCP3K-'+v+'.zip\n');
   urls.set('https://api.github.com/repos/GreyManSoftware/IHCP3K/releases/'+(v==='1.2.4'?'latest':'tags/v'+v),JSON.stringify({tag_name:'v'+v,draft:false,prerelease:false,assets:[{name:'IHCP3K-'+v+'.zip',browser_download_url:url,digest:'sha256:'+hash(p.bytes)},{name:'IHCP3K-'+v+'.zip.sha256',browser_download_url:url+'.sha256'}]}));
  }
- let reloads=0;const options={home,env:{},fetchImpl:async url=>new Response(urls.get(String(url)),{status:urls.has(String(url))?200:404}),verify:async()=>({version:'1.2.4',tools:4}),reload:async()=>{reloads++;return {status:'restart_approval_required'};}};
+ let reloads=0;const options={home,env:{},fetchImpl:async url=>new Response(urls.get(String(url)),{status:urls.has(String(url))?200:404}),verify:async()=>({version:'1.2.4',tools:4}),reload:async executable=>{assert.equal(executable,'/current/codex');reloads++;return {status:'restart_approval_required'};}};
  return {base,root,data,dir,r,old,next,config,skill,urls,options,reloads:()=>reloads};
 }
 test('update check is read-only; apply preserves data, credentials, settings and connects without restarting apps',async t=>{

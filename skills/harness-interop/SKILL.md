@@ -5,7 +5,7 @@ description: Set up, update, register, unregister or inspect IHCP3K; discover co
 
 # Harness interop
 
-Use IHCP3K **1.4.0**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
+Use IHCP3K **1.5.0**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
 
 ## Choose the communication route
 
@@ -30,6 +30,8 @@ Read [updating](../../docs/updating.md). Execute `node <app>/scripts/ihcp.mjs up
 Inspect every returned connection result. `reload_requested` is not proof of native tool loading: call `harness.health` through the current native MCP connection and match its version to the update result. A missing tool or old version still needs reconnect. Claude SDK hosts should use their supported reconnect API when exposed; interactive Claude has `/mcp reconnect ihcp3k`. Do not assume a shell can inject that command into an unrelated live session. Use a supported native integration tool when available. For an unavailable reconnect, `restart_approval_required`, or persistent closed transport, keep the safely installed update and ask through the question tool before restarting the affected app. State which app and why. Do not restart it silently or claim full completion from a fresh bundled-client health check. After the approved reconnect/restart, verify native tool loading and report one concise result. Respect any actual approval denial.
 
 If the updater refuses local edits, an occupied update lock, active workers, unsupported schema/layout or native configuration, inspect that exact condition; preserve data and user changes. Do not bypass integrity checks or repeatedly retry an uncertain mutation. Re-running a completed update rechecks health/connections without copying files or re-registering. Interrupted owned transactions recover on the next update attempt. Update reports and backups are private; do not show credentials or verbose receipts.
+
+Codex model listings refresh automatically on discovery after an executable change or cache expiry, including removals. Show the last complete list as stale when the native query fails. `harness.health` in 1.5+ includes both loaded and installed runtime versions; check both before requesting a reconnect. Do not re-register for app or model updates.
 
 ## Register the harness once
 

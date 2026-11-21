@@ -18,6 +18,9 @@ export async function startStdio(runtimeFile,tokenFile){
  if(!path.isAbsolute(workingDirectory)||!fs.statSync(workingDirectory).isDirectory())throw Error('INVALID_WORKING_DIRECTORY');
  const config=validateConfig(JSON.parse(fs.readFileSync(runtime.service_config,'utf8')),'live');
  const store=new SharedStore(runtime.database,{recipients:config.recipients});
+ store.installedVersion=()=>{
+  try{const current=JSON.parse(fs.readFileSync(runtimeFile,'utf8'));return current.service_id===runtime.service_id?current.version:null;}catch{return null;}
+ };
  try{store.transaction(()=>{
    const saved=store.db.prepare("SELECT value FROM metadata WHERE key='service_id'").get();
    if(saved&&saved.value!==config.service_id)throw Error('SERVICE_IDENTITY_MISMATCH');

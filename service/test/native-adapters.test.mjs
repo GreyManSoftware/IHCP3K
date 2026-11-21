@@ -153,6 +153,16 @@ test('queue accepts only an exact UUID receipt with clean close and no warnings'
     if (expected === 'queued') assert.deepEqual(result.queue_receipt, {message_id:OTHER, native_session_id:ID});
     if (stderr) assert.deepEqual(result.warnings, [stderr]);
   }
+  for(const launched of [false,true]){
+    const {spawnProcess}=fake({run:child=>{
+      if(launched)child.emit('spawn');
+      child.emit('error',Object.assign(Error('fixture'),{code:'ENOENT'}));
+      child.emit('close',1,null);
+    }});
+    const result=await notifyNative(queue,{recipient:'test-inbox',spawnProcess});
+    assert.equal(result.status,launched?'uncertain':'not_dispatched');
+    assert.equal(result.definitely_not_started===true,!launched);
+  }
 });
 
 test('notification target, resume and command controls cannot come from request input', () => {

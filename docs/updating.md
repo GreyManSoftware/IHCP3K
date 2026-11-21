@@ -37,3 +37,5 @@ MCP can announce changes to a tool list, but that alone does not replace a serve
 Codex exposes MCP reload through its app-server interface; whether an installed desktop instance accepts that request must be checked. Tool catalogue refresh and connection refresh are separate. [Codex app-server](https://learn.chatgpt.com/docs/app-server), [Codex connection implementation](https://github.com/openai/codex/blob/main/codex-rs/codex-mcp/src/connection_manager.rs).
 
 The implementation uses those supported mechanisms and reports gaps. It does not fabricate tool history, relax permissions or restart an app to hide a failed reconnect.
+
+Codex model changes are independent of IHCP3K releases. The next directory or model lookup observes a changed native executable and refreshes Codex's catalogue, with periodic expiry on use for server-side entitlement changes. No app restart, reinstall or re-registration is needed to see model additions and removals. See [native app updates](app-updates.md).

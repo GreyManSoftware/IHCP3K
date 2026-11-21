@@ -22,7 +22,8 @@ export class Notifications {
      if(!reservation.reserved)return {status:reservation.state};
      const abort=new AbortController();
      const task=Promise.resolve().then(()=>this.notify(config,{recipient,signal:abort.signal})).catch(()=>({status:'uncertain'})).then(result=>{
-       try{this.store.recordWake(p,{recipient,...reservation,result:result.status==='queued'?'queued':'uncertain'});}catch{/* A claim/relink may already have fenced this result. */}
+       const state=result.status==='queued'?'queued':result.definitely_not_started===true?'not_dispatched':'uncertain';
+       try{this.store.recordWake(p,{recipient,...reservation,result:state});}catch{/* A claim/relink may already have fenced this result. */}
        return {status:result.status,receipt:'native dispatch only; target consumption requires a claim'};
      }).finally(()=>this.active.delete(recipient));
      const active={abort,task};this.active.set(recipient,active);return active;
