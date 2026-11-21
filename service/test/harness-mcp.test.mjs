@@ -33,7 +33,7 @@ test('one harness MCP configuration serves separate sessions; revocation applies
  const config={harness:'alpha',expected_revision:1,discovery:{type:'codex',executable:'/updated/codex',cwd:'/alpha'},profile:{...profile,native_version:'updated'}};
  assert.equal((await call(adminClient,'harness.configure',config)).revision,2);
  const current=await call(adminClient,'harness.configuration',{harness:'alpha'});assert.equal(current.revision,2);assert.equal(current.credential,undefined);
- store.installedVersion=()=> '1.5.1';assert.equal((await call(a,'harness.health')).reconnect_required,true);
+ store.installedVersion=()=> '99.0.0';assert.equal((await call(a,'harness.health')).reconnect_required,true);
  await call(a,'session.status',{session_id:'alpha-1'});
  const job=await call(a,'session.worker_start',{session_id:'alpha-1',adapter:'reader',prompt:'read only',idempotency_key:'work'});
  await call(a,'session.worker_wait',{session_id:'alpha-1',id:job.id,timeout_ms:1000});

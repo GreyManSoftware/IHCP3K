@@ -228,7 +228,13 @@ test('native catalogue follows executable and entitlement changes, keeps last co
  await list();assert.equal(probes,2); // Two permitted harnesses, one probe each.
  const originalRevision=r.configuration(admin,'alpha').revision;
  build='two';ids=['new','keep'];
- const upgraded=await list();assert.deepEqual(upgraded.profile.models.map(m=>m.id),['new','keep']);assert.equal(upgraded.profile.native_version,'two');
+ const originalScan=r.discoverNative;let unexpectedScans=0;
+ r.discoverNative=()=>{unexpectedScans++;return [];};
+ const originalLastScan=store.db.prepare('SELECT last_scan FROM harnesses WHERE id=?').get('alpha').last_scan;
+ const upgraded=(await r.discover(a,{models_only:true,force:true})).harnesses.find(h=>h.harness==='alpha');
+ assert.equal(unexpectedScans,0);assert.equal(upgraded.sessions,undefined);assert.equal(store.db.prepare('SELECT last_scan FROM harnesses WHERE id=?').get('alpha').last_scan,originalLastScan);
+ assert.deepEqual(upgraded.profile.models.map(m=>m.id),['new','keep']);assert.equal(upgraded.profile.native_version,'two');
+ r.discoverNative=originalScan;
  assert.equal(r.configuration(admin,'alpha').revision,originalRevision);
  build='three';failure=true;
  const failed=await list();assert.deepEqual(failed.profile.models.map(m=>m.id),['new','keep']);assert.equal(failed.model_catalogue.error,'NATIVE_PROFILE_RPC_FAILED');

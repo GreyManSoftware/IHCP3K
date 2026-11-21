@@ -1,6 +1,6 @@
 # Native application updates
 
-## App updates and retained inboxes (1.5.0)
+## App updates and retained inboxes (1.5.1)
 
 The operator can update discovery and the public profile without unlinking the harness:
 
@@ -32,7 +32,7 @@ On Windows, an operator may pin an installed package family rather than one vers
 
 Use actual current-account `Get-AppxPackage` evidence for the family and relative executable. Resolution queries only that exact package family in the current account, requires one healthy package and an existing file inside it, and never falls back to PATH or another publisher. Discovery, notifications and one-off work use the same policy. Missing/ambiguous packages fail closed. Other platforms and non-packaged Claude installations use the operator-selected absolute executable, including a user-managed stable symlink; a changed path can be applied through configure. No cross-platform package resolver or automatic PATH search is claimed.
 
-Codex model discovery uses the native, read-only `model/list` RPC. On the next explicit IHCP3K discovery or model lookup, the runtime checks the registered executable identity. It refreshes when the executable changes, on the first lookup or after an hour, so server-side model changes also appear. Force refresh can bring the check forward. A complete scan replaces the catalogue, adding new models and dropping removed ones. Failed or partial scans keep the last complete list, report it as stale and back off briefly. Model reads do not delay normal mail routing. Multiple connections share the catalogue and coordinate probes in SQLite. No background automation, model invocation, permission change, account switch or new registration is needed.
+Codex model discovery uses the native, read-only `model/list` RPC. On the next explicit IHCP3K discovery or model lookup, the runtime checks the registered executable identity. It refreshes when the executable changes, on the first lookup or after an hour, so server-side model changes also appear. The managed updater makes one best-effort model-only refresh after verifying the new installation. Force refresh can also bring the check forward. A complete scan replaces the catalogue, adding new models and dropping removed ones. Failed or partial scans keep the last complete list, report it as stale and back off briefly. Model reads do not delay normal mail routing. Multiple connections share the catalogue and coordinate probes in SQLite. No background automation, model invocation, permission change, account switch or new registration is needed.
 
 The optional `profile` command records a new manual snapshot, including the resolved executable's native version. It uses the same paginated observer for Codex and preserves dated usage records. Claude has no verified native catalogue interface here and retains its operator-supplied profile. Catalogue listings are advisory; they do not authorize work or guarantee entitlement at execution time.
 

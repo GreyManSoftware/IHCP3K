@@ -128,11 +128,11 @@ export class HarnessRegistry{
   })();this.inflight.set(harness,task);try{return await task;}finally{this.inflight.delete(harness);try{this.store.transaction(()=>this.db.prepare('DELETE FROM harness_scans WHERE harness=? AND token=?').run(harness,scanToken));}catch{/* Expired leases are collected on the next maintenance pass. */}}
  }
  permitted(p){const own=this.row(p),peers=JSON.parse(own.peers_json);return this.db.prepare('SELECT * FROM harnesses WHERE active=1 ORDER BY id').all().filter(r=>r.id===own.id||(peers.includes('*')||peers.includes(r.id))&&(JSON.parse(r.peers_json).includes('*')||JSON.parse(r.peers_json).includes(own.id)));}
- async discover(p,{force=false,models=true}={},signal){
+ async discover(p,{force=false,models=true,models_only=false}={},signal){
   const allowed=this.permitted(p);const observations=[];
   signal=AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(30000)]);
   // Discovery is demand-driven, bounded and does not invoke a model.
-  for(const r of allowed){try{await this.refresh(r.id,{force,signal});}catch{} }
+  if(!models_only)for(const r of allowed){try{await this.refresh(r.id,{force,signal});}catch{} }
   if(models&&!signal.aborted){
    // Model observation must not delay or invalidate session routing on sends.
    for(const row of this.permitted(p)){
@@ -143,6 +143,10 @@ export class HarnessRegistry{
   for(const r of this.permitted(p)){
    const current=this.db.prepare('SELECT * FROM harnesses WHERE id=?').get(r.id);
    const type=JSON.parse(current.config_json).type;
+   if(models_only){
+    if(type==='codex')observations.push({harness:r.id,type,profile:this.catalogue.profile(current),model_catalogue:this.catalogue.status(current)});
+    continue;
+   }
    observations.push({harness:r.id,type,profile:this.catalogue.profile(current),...(type==='codex'?{model_catalogue:this.catalogue.status(current)}:{}),last_scan:current.last_scan?new Date(current.last_scan).toISOString():null,error:current.last_error,stale:!!current.last_error||current.last_scan===null||this.store.now()-current.last_scan>30000,
     sessions:this.db.prepare('SELECT s.endpoint,s.native_id,s.label,s.cwd,s.state FROM harness_sessions s JOIN endpoints e ON e.id=s.endpoint WHERE s.harness=? AND e.active=1 ORDER BY s.label,s.endpoint').all(r.id)});
   }

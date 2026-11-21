@@ -61,6 +61,10 @@ Setup now reuses verified local packages and keeps lifecycle/destructive tests o
 
 This page distinguishes automated tests from checks performed in real agent applications. A **fixture** is controlled test data or a simulated app response; a **rehearsal** exercises a specific real workflow. Neither proves compatibility with every app version. Technical terms are defined in [terminology](terminology.md).
 
+## Version 1.5.1: post-update model refresh
+
+The pinned Docker suite passed all 165 tests. The managed-update fixture verifies that a failed catalogue refresh leaves the new runtime installed and that repeat invocations respect the catalogue cache. The model-only discovery fixture verifies that refresh updates the catalogue without scanning sessions or changing the last session scan time.
+
 ## Version 1.5.0: notification recovery and automatic Codex model discovery
 
 The pinned Docker release suite passed **165 tests** (95 service, 16 waiter, 32 CLI/update/resolution, 13 legacy import, 9 packaged installer). Regression checks cover a child that returns the final page but never exits, a proven native launch failure versus ambiguous delivery, catalogue additions/removals, expiry and failed probes, shared probe fencing and operator configuration retries without local mirror writes. The managed-update checks cover interruption, rollback and reconnect reporting using fixtures.

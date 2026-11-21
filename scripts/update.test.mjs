@@ -43,19 +43,19 @@ function fixture(t){
   urls.set(url,p.bytes);urls.set(url+'.sha256',hash(p.bytes)+'  IHCP3K-'+v+'.zip\n');
   urls.set('https://api.github.com/repos/GreyManSoftware/IHCP3K/releases/'+(v==='1.2.4'?'latest':'tags/v'+v),JSON.stringify({tag_name:'v'+v,draft:false,prerelease:false,assets:[{name:'IHCP3K-'+v+'.zip',browser_download_url:url,digest:'sha256:'+hash(p.bytes)},{name:'IHCP3K-'+v+'.zip.sha256',browser_download_url:url+'.sha256'}]}));
  }
- let reloads=0;const options={home,env:{},fetchImpl:async url=>new Response(urls.get(String(url)),{status:urls.has(String(url))?200:404}),verify:async()=>({version:'1.2.4',tools:4}),reload:async executable=>{assert.equal(executable,'/current/codex');reloads++;return {status:'restart_approval_required'};}};
- return {base,root,data,dir,r,old,next,config,skill,urls,options,reloads:()=>reloads};
+ let reloads=0;const modelCalls=[];const options={home,env:{},fetchImpl:async url=>new Response(urls.get(String(url)),{status:urls.has(String(url))?200:404}),verify:async()=>({version:'1.2.4',tools:4}),refreshModels:async(runtimeFile,harnessDir,{force})=>{assert.equal(harnessDir,dir);assert.equal(JSON.parse(fs.readFileSync(runtimeFile,'utf8')).version,'1.2.4');modelCalls.push(force);if(force)throw Error('fixture native catalogue unavailable');return {status:'available'};},reload:async executable=>{assert.equal(executable,'/current/codex');reloads++;return {status:'restart_approval_required'};}};
+ return {base,root,data,dir,r,old,next,config,skill,urls,options,modelCalls,reloads:()=>reloads};
 }
 test('update check is read-only; apply preserves data, credentials, settings and connects without restarting apps',async t=>{
  const f=fixture(t),before=fs.readFileSync(f.r.database),config=fs.readFileSync(f.config,'utf8');
  assert.deepEqual(parseInvocation(['update',f.dir,'--check']).check,true);
  assert.equal((await update(f.dir,{...f.options,check:true})).status,'update_available');assert.equal(fs.existsSync(path.join(f.data,'release-cache')),false);assert.equal(f.reloads(),0);
- const result=await update(f.dir,f.options);assert.equal(result.status,'updated');assert.equal(result.connections[0].status,'restart_approval_required');assert.equal(result.restart_policy,'ask');
+ const result=await update(f.dir,f.options);assert.equal(result.status,'updated');assert.equal(result.connections[0].status,'restart_approval_required');assert.equal(result.restart_policy,'ask');assert.deepEqual(result.model_catalogue,{status:'unavailable'});assert.deepEqual(f.modelCalls,[true]);
  assert.deepEqual(fs.readFileSync(f.r.database),before);assert.equal(fs.readFileSync(path.join(f.dir,'harness.tok'),'utf8'),'private-fixture-token');
  assert.ok(fs.readFileSync(f.config,'utf8').includes('approval_policy = "never"'));assert.ok(fs.readFileSync(f.config,'utf8').includes('mcp_servers.other'));assert.match(fs.readFileSync(f.config,'utf8'),/--ihcp-release=1.2.4/);
  assert.equal(fs.readFileSync(f.skill,'utf8'),'skill 1.2.4');
  write(f.config,fs.readFileSync(f.config,'utf8').replace(',"--ihcp-release=1.2.4"',''));
- assert.equal((await update(f.dir,f.options)).status,'up_to_date');assert.equal(f.reloads(),2);
+ const current=await update(f.dir,f.options);assert.equal(current.status,'up_to_date');assert.equal(f.reloads(),2);assert.deepEqual(current.model_catalogue,{status:'available'});assert.deepEqual(f.modelCalls,[true,false]);
  assert.match(fs.readFileSync(f.config,'utf8'),/--ihcp-release=1.2.4/);
  assert.notEqual(fs.readFileSync(f.config,'utf8'),config);
 });

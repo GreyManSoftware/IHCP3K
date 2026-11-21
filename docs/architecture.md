@@ -2,7 +2,7 @@
 
 IHCP3K connects sessions in different agent applications, called **harnesses**. Each harness registers once and supplies a read-only native session-discovery adapter. Sessions receive stable internal addresses automatically, without individual enrolment. Each uses **MCP (Model Context Protocol)** tools through a local IHCP3K process, or **runtime**. **Stdio** means that messages travel through that process's standard input/output, rather than a network server. SQLite stores requests and results in one private database. See [terminology](terminology.md) for the concurrency and lifecycle terms below.
 
-**v1.5.0; see the validation report for tested behavior.** Native adapter behavior remains subject to installed-version validation. The default runtime is local MCP stdio using an existing Node runtime. Compatible runtime connections share one private SQLite database. The database is the coordination authority; process identity is not chat identity.
+**v1.5.1; see the validation report for tested behavior.** Native adapter behavior remains subject to installed-version validation. The default runtime is local MCP stdio using an existing Node runtime. Compatible runtime connections share one private SQLite database. The database is the coordination authority; process identity is not chat identity.
 
 ```mermaid
 flowchart LR
@@ -37,7 +37,7 @@ The drawing shows logical components, not a guaranteed process count. Each stdio
 
 Schema 6 adds harness registrations, hashed harness credentials, discovered session metadata and cross-process scan leases. The shared schema also stores mail, scoped directory entries, hashed credentials, request/reply links, attendance leases, native notification reservations and worker results. WAL transactions serialize mutations. Claim generations/tokens, endpoint revisions and notification reservations fence stale operations. A short database lease coordinates general maintenance across runtime processes; worker cleanup reserves eligible rows transactionally.
 
-Compatible v1.5.0 processes may share the database. A writer-version fence rejects incompatible writes. The older Docker/HTTP store uses an exclusive owner lock; it must not run against the shared local authority. Installer reuse checks identity, schema and copied-bundle integrity. Installation does not authorize an upgrade or live migration.
+Compatible v1.5.1 processes may share the database. A writer-version fence rejects incompatible writes. The older Docker/HTTP store uses an exclusive owner lock; it must not run against the shared local authority. Installer reuse checks identity, schema and copied-bundle integrity. Installation does not authorize an upgrade or live migration.
 
 A committed message survives process shutdown. Expired claims and uncertain notification/worker outcomes require reconciliation; they do not silently replay. Opening another stdio connection must not invalidate a valid claim held elsewhere. A completed message clears its body but retains duplicate protection.
 

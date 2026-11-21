@@ -59,7 +59,7 @@ const harnessSchemas={
  'harness.register':{harness:recipient,credential:z.string(),discovery:profile,profile,peers:z.array(z.union([recipient,z.literal('*')])).max(100).optional(),notification:profile.optional()},
  'harness.configuration':{harness:recipient},
  'harness.configure':{harness:recipient,expected_revision:z.number().int().min(1),discovery:profile,profile,notification:profile.optional()},
- 'harness.discover':{force:z.boolean().default(false)},
+ 'harness.discover':{force:z.boolean().default(false),models_only:z.boolean().default(false)},
  'harness.health':{},
  'harness.unregister':{},
  'session.remote_prompt':{session_id:z.string().min(1).max(256),harness:recipient,prompt:z.string().min(1).max(65536),context:z.string().max(65536).optional(),working_folder:z.string().max(4096).optional(),model:z.string().min(1).max(200).optional(),permissions:z.literal('read-only').default('read-only'),allow_new_session:z.literal(true),timeout_ms:z.number().int().min(1000).max(300000).default(180000),idempotency_key:z.string().min(1).max(200)},
@@ -86,7 +86,7 @@ function equal(a,b) { const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length
 function reject(res,code,error) { res.writeHead(code,{'Content-Type':'application/json'});res.end(JSON.stringify({error})); }
 
 export function createToolServer(store,directory,principal,abort=new AbortController(),resolvePrincipal=()=>principal){
-    const version='1.5.0';
+    const version='1.5.1';
     const server=new McpServer({name:'ihcp3k',version});
     if(store.harnesses)for(const [name,inputSchema] of Object.entries(harnessSchemas)){
       if(name.startsWith('session.worker_')&&!store.workers)continue;

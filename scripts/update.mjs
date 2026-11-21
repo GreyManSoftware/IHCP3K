@@ -55,6 +55,20 @@ export async function verifyRuntime(runtimeFile,harnessDir){
  const c=await connect({runtimeFile,tokenFile:path.join(harnessDir,'harness.tok')});
  try{const tools=(await c.listTools()).tools.map(t=>t.name);if(c.getServerVersion()?.version!==runtime.version||!tools.includes('harness.discover')||!tools.includes('session.exchange')||!tools.includes('harness.health'))throw Error('UPDATED_MCP_HEALTH_FAILED');const health=await c.callTool({name:'harness.health',arguments:{}});if(health.isError||health.structuredContent?.version!==runtime.version)throw Error('UPDATED_MCP_HEALTH_FAILED');return {version:runtime.version,tools:tools.length,connection:'fresh_client'};}finally{await c.close();}
 }
+// A catalogue failure cannot undo a verified installation. Do not scan session
+// inventory just to warm the advertised models.
+async function refreshInstalledModels(runtimeFile,harnessDir,{force}){
+ const runtime=read(runtimeFile);
+ if(compareVersions(runtime.version,'1.5.1')<0)return {status:'unsupported'};
+ const {connect}=await import(pathToFileURL(runtime.client_bundle).href+'?version='+runtime.version);
+ const client=await connect({runtimeFile,tokenFile:path.join(harnessDir,'harness.tok')});
+ try{
+  const result=await client.callTool({name:'harness.discover',arguments:{models_only:true,force}},undefined,{timeout:35000});
+  if(result.isError||!Array.isArray(result.structuredContent?.harnesses))return {status:'unavailable'};
+  const catalogues=result.structuredContent.harnesses.map(h=>({harness:h.harness,...h.model_catalogue,models:h.profile.models.length}));
+  return {status:catalogues.length===0?'no_supported_harness':catalogues.some(h=>h.stale)?'stale':'available',catalogues};
+ }finally{await client.close();}
+}
 function rollback(state,root){
  const {txn,files}=state;within(path.join(root,'data','updates'),txn);let conflict=false;
  for(const f of [...files].reverse()){
@@ -99,7 +113,7 @@ function acquire(data,root){
  }
  const fd=fs.openSync(lock,'wx',0o600);fs.writeFileSync(fd,JSON.stringify({pid:process.pid}));fs.closeSync(fd);return ()=>fs.unlinkSync(lock);
 }
-export async function update(harnessDir,{check=false,home=os.homedir(),env=process.env,fetchImpl=fetch,verify=verifyRuntime,reload=reloadCodex,checkpoint=()=>{}}={}){
+export async function update(harnessDir,{check=false,home=os.homedir(),env=process.env,fetchImpl=fetch,verify=verifyRuntime,refreshModels=refreshInstalledModels,reload=reloadCodex,checkpoint=()=>{}}={}){
  process.umask(0o077);harnessDir=path.resolve(harnessDir);
  const h=read(path.join(harnessDir,'harness.json'));if(!h.linked)throw Error('HARNESS_UNREGISTERED');
  const runtimeFile=path.resolve(h.runtime_file),data=path.dirname(runtimeFile),root=path.dirname(data);
@@ -110,6 +124,9 @@ export async function update(harnessDir,{check=false,home=os.homedir(),env=proce
   const {runtime}=installed(runtimeFile),info=await releaseInfo('latest',{fetchImpl}),order=compareVersions(info.version,runtime.version);
   if(check)return {status:order>0?'update_available':'up_to_date',installed:runtime.version,available:info.version};
   if(order<0)return {status:'newer_than_release',installed:runtime.version,available:info.version};
+  const observeModels=async force=>{
+   try{return await refreshModels(runtimeFile,harnessDir,{force});}catch{return {status:'unavailable'};}
+  };
   const reconnect=async()=>{
    const plans=planConnections(read(runtimeFile),read(runtimeFile).version,{home,env}),result=[];
    for(const p of plans){
@@ -126,8 +143,9 @@ export async function update(harnessDir,{check=false,home=os.homedir(),env=proce
     try{for(const f of edits){if(fs.readFileSync(f.path,'utf8')!==f.before)throw Error('CONFIG_CHANGED_DURING_UPDATE');atomic(f.path,f.after,true);}}
     catch(e){for(const f of edits)if(fs.readFileSync(f.path,'utf8')===f.after)atomic(f.path,f.before,true);throw e;}
    }
-   const connections=await reconnect();save(path.join(data,'update-report.json'),{installed:runtime.version,health,connections,restart_policy:'ask'});
-   return {status:'up_to_date',installed:runtime.version,health,connections,restart_policy:'ask'};
+   const model_catalogue=await observeModels(false);
+   const connections=await reconnect();save(path.join(data,'update-report.json'),{installed:runtime.version,health,connections,model_catalogue,restart_policy:'ask'});
+   return {status:'up_to_date',installed:runtime.version,health,connections,model_catalogue,restart_policy:'ask'};
   }
   if(info.version.split('.')[0]!==runtime.version.split('.')[0])throw Error('MAJOR_UPGRADE_REQUIRES_MIGRATION');
   const cache=path.join(data,'release-cache');fs.mkdirSync(cache,{recursive:true,mode:0o700});if(fs.realpathSync(cache)!==cache)throw Error('UPDATE_LINK_NOT_ALLOWED');
@@ -166,10 +184,11 @@ export async function update(harnessDir,{check=false,home=os.homedir(),env=proce
    checkpoint('activated');const health=await verify(runtimeFile,harnessDir);
    save(journal,{...state,phase:'installed',health});
    save(path.join(txn,'owned-update.json'),{kind:'ihcp3k-update',status:'installed',at:Date.now()});
+   const model_catalogue=await observeModels(true);
    let connections;try{connections=await reconnect();}catch{connections=[{status:'native_reconnect_required'}];}
-   save(path.join(data,'update-report.json'),{installed:info.version,health,connections,restart_policy:'ask'});
+   save(path.join(data,'update-report.json'),{installed:info.version,health,connections,model_catalogue,restart_policy:'ask'});
    try{prune(data,info.version,runtime.version);}catch{/* Retain backups if safe pruning cannot be established. */}
-   return {status:'updated',installed:info.version,previous:runtime.version,health,connections,restart_policy:'ask'};
+   return {status:'updated',installed:info.version,previous:runtime.version,health,connections,model_catalogue,restart_policy:'ask'};
   }catch(e){rollback(state,root);save(journal,{...state,phase:'rolled_back'});throw e;}
  }finally{release();}
 }

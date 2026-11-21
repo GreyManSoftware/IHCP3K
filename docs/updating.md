@@ -38,4 +38,6 @@ Codex exposes MCP reload through its app-server interface; whether an installed 
 
 The implementation uses those supported mechanisms and reports gaps. It does not fabricate tool history, relax permissions or restart an app to hide a failed reconnect.
 
+After installing a verified release, the updater makes one best-effort model-only refresh against the new runtime. This step does not alter the session inventory. The result reports the catalogue separately from install health. If the query fails, the last complete listing is retained and the installation stays active. Running an already-current updater respects the regular catalogue cache. A pre-1.5.1 updater cannot warm the catalogue during its first upgrade; the next lookup or rerun of the updater does so.
+
 Codex model changes are independent of IHCP3K releases. The next directory or model lookup observes a changed native executable and refreshes Codex's catalogue, with periodic expiry on use for server-side entitlement changes. No app restart, reinstall or re-registration is needed to see model additions and removals. See [native app updates](app-updates.md).
