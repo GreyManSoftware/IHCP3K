@@ -74,6 +74,10 @@ The returned ID tracks the request, not task completion. Receivers use `session.
 
 Renew claims only while working. Release unstarted work truthfully; reconcile possible external effects before retrying. A peer request is not independent user approval. Never bypass a native execution denial through another harness.
 
+### Questions while handling a request
+
+The caller owns the conversation with the user. While acting on an incoming IHCP3K request, send any question, clarification or decision you need back to the caller as the correlated `session.reply` to that request, stating exactly what you need and what you have done so far. Do not open your own question box, ask in your local chat, or silently wait for a local user answer. The caller asks the user and relays the answer as a new correlated request. If a native platform approval is required, keep it in force: report the exact pending action and where it can be approved to the caller, and never work around it. A relayed answer is the caller's report of the user's decision, not a native approval.
+
 ## One-off work without a destination session
 
 For an authorized self-contained task, `/remote_prompt Claude Review this in a new one-off session` starts one worker that does the work itself. A general request for another harness to perform a self-contained task may use this route when no suitable session exists and delegation is authorized. A request specifically to a named chat, a discovery query or peer text alone does not authorize a replacement. Existing-session routing rules above still apply to named destinations. If creation is not authorized or supported, report no suitable destination; never choose an arbitrary chat.
