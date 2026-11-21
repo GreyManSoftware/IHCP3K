@@ -78,7 +78,7 @@ export function discoverSessions(config,{spawnProcess=spawn,signal}={}){
    catch(e){reject(e instanceof ServiceError?e:new ServiceError('DISCOVERY_INVALID_OUTPUT'));}
   });
   if(signal?.aborted){abort();return;}
-  try{if(c.type==='codex')send({id:1,method:'initialize',params:{clientInfo:{name:'ihcp3k_discovery',version:'1.5.1'}}});else child.stdin.end();}
+  try{if(c.type==='codex')send({id:1,method:'initialize',params:{clientInfo:{name:'ihcp3k_discovery',version:'1.5.2'}}});else child.stdin.end();}
   catch{finishError('DISCOVERY_WRITE_FAILED');}
  });
 }

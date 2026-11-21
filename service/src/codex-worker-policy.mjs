@@ -51,6 +51,6 @@ export function codexWorkerPolicy(command,{signal,spawnProcess=spawn}={}){
    if(error||code!==0||!servers){reject(Error(error??'worker_policy_unverified'));return;}
    resolve(servers.flatMap(name=>['-c',`mcp_servers.${name}.enabled=false`]));
   });
-  send({id:1,method:'initialize',params:{clientInfo:{name:'ihcp3k_worker_policy',version:'1.5.1'}}});
+  send({id:1,method:'initialize',params:{clientInfo:{name:'ihcp3k_worker_policy',version:'1.5.2'}}});
  });
 }

@@ -69,7 +69,7 @@ export async function observeNativeProfile(config,previous,{
   });
   signal?.addEventListener('abort',abort,{once:true});
   if(signal?.aborted){abort();return;}
-  try{send({id:1,method:'initialize',params:{clientInfo:{name:'ihcp3k_profile',version:'1.5.1'}}});}
+  try{send({id:1,method:'initialize',params:{clientInfo:{name:'ihcp3k_profile',version:'1.5.2'}}});}
   catch{fail('NATIVE_PROFILE_WRITE_FAILED');}
  });
  return {...previous,native_version,observed_at,models,source:'Native --version and paginated read-only model/list; usage observations retained with original timestamps'};

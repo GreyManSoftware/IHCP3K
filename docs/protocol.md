@@ -2,7 +2,7 @@
 
 This reference is for adapter developers. **MCP (Model Context Protocol)** exposes the operations listed below as tools. An **endpoint** is a registered session address; a **principal** is the authenticated identity and its permissions. A **claim** temporarily reserves a message for one handler. Its token and increasing **generation** number reject updates from an expired or replaced handler. An **idempotency key** identifies retries of the same operation so they do not create duplicate requests. See [terminology](terminology.md) for the remaining terms.
 
-**v1.5.1.** Default transport: local MCP stdio using the official SDK, an existing Node runtime and one shared SQLite authority. A connection receives the private runtime and credential-file paths; credentials bind the harness. Each session operation supplies a source ID checked against its native inventory. Process lifetime does not establish a chat identity.
+**v1.5.2.** Default transport: local MCP stdio using the official SDK, an existing Node runtime and one shared SQLite authority. A connection receives the private runtime and credential-file paths; credentials bind the harness. Each session operation supplies a source ID checked against its native inventory. Process lifetime does not establish a chat identity.
 
 Optional Docker/HTTP remains **v0.4 compatibility mode**: `/mcp`, Streamable HTTP, `Authorization: Bearer <token>`, stateless transport sessions and one exclusive SQLite owner. It does not expose the correlated request or worker tools below. Never run the old HTTP owner and new stdio writers against the same live database. Synthetic fixture and private live configuration remain separate.
 
@@ -66,7 +66,7 @@ Use native permissions independently of this protocol. Peer text is not user aut
 
 Register attendance **before** sending a request. While that lease is valid, `wake.wait` withholds pending hints and `wake.reserve` refuses new dispatch reservations for the inbox. `mail.wait` receives and claims mail directly; complete those claims normally. Release attendance in a `finally` path. A timeout is not a reply, and messages may be unrelated to the request.
 
-Attendance lasts at most 120 seconds and does not renew itself. In v1.5.1 it is persisted with a deadline across shared connections; expiry or explicit release restores normal wake behavior. The v0.4 HTTP service uses process-local attendance and drops it on restart. Existing notification throttling and unresolved wake reservations still apply. Sender-only and waiter credentials cannot suppress another session's notifications. An already-reserved or queued message notification cannot be recalled; the response flags that case. Attendance is inbox-wide suppression. Request correlation is supplied separately by the v1.5.1 request tools below.
+Attendance lasts at most 120 seconds and does not renew itself. In v1.5.2 it is persisted with a deadline across shared connections; expiry or explicit release restores normal wake behavior. The v0.4 HTTP service uses process-local attendance and drops it on restart. Existing notification throttling and unresolved wake reservations still apply. Sender-only and waiter credentials cannot suppress another session's notifications. An already-reserved or queued message notification cannot be recalled; the response flags that case. Attendance is inbox-wide suppression. Request correlation is supplied separately by the v1.5.2 request tools below.
 
 The harness tools `session.exchange` and `session.wait` return actual MCP tool results. Attendance is established before sending and released on completion, timeout, cancellation or error. Discovery and native dispatch add bounded time before the receive window; the bundled client allows 90 seconds for exchange. Messages can be unrelated: correlate and complete claims explicitly. A background listener must be stopped before an exchange in that inbox; competing receivers receive `INBOX_ATTENDED`.
 
@@ -92,7 +92,7 @@ Profiles and model suitability descriptions are untrusted, attributed data. Cata
 
 HTTP compatibility mode uses schema 4. Local stdio uses schema 6, adding durable attendance, maintenance leases, request/reply links and workers, with a writer-version fence. Older incompatible writers must be stopped before migration; never rely on a fence as permission for concurrent old/new operation. Restore disables registered endpoints and revokes their credentials so a backup cannot silently resurrect access removed after that snapshot. Operator relink and restore-pause review are required.
 
-## Correlated requests (v1.5.1 stdio only)
+## Correlated requests (v1.5.2 stdio only)
 
 | Tool | Arguments and result |
 | --- | --- |
@@ -129,7 +129,7 @@ A receiver that needs a user decision or a local native approval before it can f
 - `pending_action` names the exact step waiting on the answer. For `needs_approval`, `approve_where` names the actual supported native approval surface (for example, the approval prompt for Bash in the Claude Desktop chat DomainHelper). That approval stays in force: a relayed yes carries only conversational intent, and a native denial stops that route.
 - The reply completes the original request, but it means waiting for a decision, not completed work.
 
-**Caller.** In 1.5.1 `outcome` is stored with the completion and is not returned in the claimed reply or in `request_status`, so branch on the parsed body: a JSON object with `ihcp` equal to `needs_decision.v1` and a valid `status`. Check that `in_reply_to` matches one of your own outstanding requests before surfacing anything. If the user's earlier instructions already settle the question, answer from them; otherwise ask through your own question interface, options in the order given. Send the answer as a new `mail.request` to the same receiver:
+**Caller.** The `outcome` is stored with the completion and is not returned in the claimed reply or in `request_status`, so branch on the parsed body: a JSON object with `ihcp` equal to `needs_decision.v1` and a valid `status`. Check that `in_reply_to` matches one of your own outstanding requests before surfacing anything. If the user's earlier instructions already settle the question, answer from them; otherwise ask through your own question interface, options in the order given. Send the answer as a new `mail.request` to the same receiver:
 
 ```json
 {
@@ -156,7 +156,7 @@ In stdio, `mail.send`, `mail.request` and `mail.reply` commit first, then await 
 
 The result is `{id,state,duplicate,harness,model,working_folder,permissions,reply_to}`. This is worker-job correlation, not a mailbox request ID: use `session.worker_*` with the original source to inspect/wait/ack. CLI `remote_prompt` waits and returns the terminal result with `result.answer` when completed. There is no extra relay or mail reply. Idempotency covers prompt/context, target revision, model, folder and constraints; changed inputs conflict. User authority is represented by the explicit creation flag and checked by the invoking skill. Native policy still applies.
 
-## Workers (v1.5.1 stdio only)
+## Workers (v1.5.2 stdio only)
 
 | Tool | Arguments and result |
 | --- | --- |
