@@ -31,6 +31,8 @@ test('missing Claude target requests one verified desktop relay without forwardi
   const sent=f.calls[1];assert.equal(sent.name,'session.request');assert.equal(sent.args.idempotency_key,'resolve:wake-game');
   const body=JSON.parse(sent.args.body);assert.equal(body.type,'ihcp.desktop-wake.v1');assert.deepEqual(body.target,{name:req.name,cwd:req.cwd});
   assert.match(body.instructions,/Do not perform project work, create\/resume\/copy a chat/);
+  assert.match(body.instructions,/routine IHCP3K relay work, not a task in your project/);
+  assert.match(body.instructions,/do not release it/);
 });
 test('unavailable, stale, ambiguous and unsupported targets do not trigger guesses or fanout',async()=>{
   for(const [change,status,input] of [
