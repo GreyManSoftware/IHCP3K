@@ -164,7 +164,7 @@ export class HarnessRegistry{
   if(operation==='exchange'||operation==='wait'||operation==='listen')return this.inboxCall(p,operation,session_id,args,signal);
   // Never use a mutable connection-wide current-session value: clients may share one process.
   if(['request','send','reply','remote_prompt'].includes(operation))await this.discover(p,{models:false},signal);
-  const retained=['claim','status','reply','complete','renew','release','requestStatus','unattend','worker_status','worker_wait','worker_ack'].includes(operation);
+  const retained=['claim','status','reply','complete','renew','release','requestStatus','withdrawWake','unattend','worker_status','worker_wait','worker_ack'].includes(operation);
   const principal=await this.sessionPrincipal(p,session_id,signal,{retained,reply:operation==='reply'});
   if(operation==='remote_prompt'){
    check(!signal?.aborted,'CANCELLED');

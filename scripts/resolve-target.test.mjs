@@ -4,7 +4,7 @@ import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {resolveTarget,desktopBindings} from './resolve-target.mjs';
-import {desktopSessions,readDesktopSession,desktopOpener} from './desktop-open.mjs';
+import {desktopSessions,readDesktopSession,desktopOpener,retainedDesktopTarget} from './desktop-open.mjs';
 import {DatabaseSync} from 'node:sqlite';
 const A='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',B='bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
 const req={session_id:A,harness:'Claude',name:'Game',cwd:'E:/Projects/Game',idempotency_key:'wake-game'};
@@ -15,7 +15,7 @@ function fixture(sessions=[relay]){
   const records=new Map([[B,{desktop_id:`local_${B}`,name:relay.label,cwd:relay.cwd}]]);
   const invoke=async(_c,name,args)=>{calls.push({name,args});
     if(name==='harness.discover')return {harnesses:[h]};
-    if(name==='session.request')return {id:A,request_id:A};
+    if(name==='session.request')return {id:A,request_id:A,native_notification:{status:'uncertain'}};
     if(name==='session.request_status')return {id:A,state:'pending',reply:null};
     assert.fail('unexpected operation '+name);
   };
@@ -27,7 +27,7 @@ test('resolution uses a live exact target and never sends a relay request',async
 });
 test('missing Claude target requests one verified desktop relay without forwarding project work',async()=>{
   const f=fixture();const r=await resolveTarget(null,req,f.options);
-  assert.equal(r.status,'wake_requested');assert.equal(r.relay,'relay');
+  assert.equal(r.status,'wake_requested');assert.equal(r.relay,'relay');assert.equal(r.native_notification.status,'uncertain');
   const sent=f.calls[1];assert.equal(sent.name,'session.request');assert.equal(sent.args.idempotency_key,'resolve:wake-game');
   const body=JSON.parse(sent.args.body);assert.equal(body.type,'ihcp.desktop-wake.v1');assert.deepEqual(body.target,{name:req.name,cwd:req.cwd});
   assert.match(body.instructions,/Do not perform project work, create\/resume\/copy a chat/);
@@ -78,7 +78,7 @@ test('all-suspended resolution opens one existing desktop identity and verifies 
  const f=fixture([]),saved={native_id:B,desktop_id:`local_${B}`,label:'Game',cwd:req.cwd,file:'/native/account/chat.json'};
  let opens=0;
  const options={...f.options,desktop:()=>[saved],wait:async()=>{},openDesktop:async()=>{
-  opens++;f.h.sessions.push({...target,native_id:B});f.records.set(B,{desktop_id:saved.desktop_id,name:'Game',cwd:req.cwd});return {status:'desktop_opened'};
+  opens++;f.h.sessions.push(target);f.records.set(target.native_id,{desktop_id:saved.desktop_id,name:'Game',cwd:req.cwd});return {status:'desktop_open_uncertain'};
  }};
  assert.equal((await resolveTarget(null,req,options)).status,'found');assert.equal(opens,1);
  assert.equal(f.calls.some(c=>c.name==='session.request'),false);
@@ -88,7 +88,7 @@ test('desktop fallback rejects ambiguous, changed, unsupported and uncertain ide
  const saved={native_id:B,desktop_id:`local_${B}`,label:'Game',cwd:req.cwd,file:'/native/account/chat.json'};
  for(const status of ['desktop_open_requires_tty','desktop_open_uncertain','desktop_identity_changed','desktop_launcher_unavailable']){
   const f=fixture([]);let opens=0;
-  assert.equal((await resolveTarget(null,req,{...f.options,desktop:()=>[saved],openDesktop:async()=>{opens++;return {status};}})).status,status);assert.equal(opens,1);
+  assert.equal((await resolveTarget(null,req,{...f.options,desktop:()=>[saved],wait:async()=>{},openDesktop:async()=>{opens++;return {status};}})).status,status);assert.equal(opens,1);
  }
  const f=fixture([]),base={...f.options,desktop:()=>[saved,{...saved,file:'/other/chat.json'}],openDesktop:async()=>assert.fail('ambiguous open')};
  assert.equal((await resolveTarget(null,req,base)).status,'ambiguous_target');
@@ -113,20 +113,34 @@ test('desktop state reader excludes archived, remote, malformed and ambiguous me
  for(const change of [{isArchived:true},{isArchived:null},{envScopeId:'ssh'},{startedFromEnvironmentId:'cloud'},{cliSessionId:'invalid'},{sessionId:`local_${B}`},{cwd:'relative'}]){
   writeFileSync(file,JSON.stringify({...d,...change}));assert.equal(readDesktopSession(file),null);
  }
+ const database=join(dir,'mail.db'),runtimeFile=join(dir,'runtime.json');
+ const db=new DatabaseSync(database);db.exec('CREATE TABLE harnesses(id TEXT,active INTEGER,config_json TEXT); CREATE TABLE harness_sessions(harness TEXT,native_id TEXT,label TEXT,cwd TEXT)');
+ db.prepare('INSERT INTO harnesses VALUES(?,1,?)').run('claude',JSON.stringify({type:'claude'}));
+ db.prepare('INSERT INTO harness_sessions VALUES(?,?,?,?)').run('claude',B,'Game',dir);db.close();writeFileSync(runtimeFile,JSON.stringify({database}));
+ const retained=retainedDesktopTarget(runtimeFile,{harness:'claude'},{...req,cwd:dir});
+ const legacy={...d,envScopeId:undefined,originCwd:dir};
+ writeFileSync(file,JSON.stringify(legacy));assert.equal(readDesktopSession(file),null);
+ assert.equal(readDesktopSession(file,{retained}).native_id,B);
+ for(const change of [{envScopeId:'ssh'},{envScopeId:null},{isArchived:true},{startedFromEnvironmentId:'cloud'},{startedFromEnvironmentId:undefined},{originCwd:join(dir,'elsewhere')},{cliSessionId:A}]){
+  writeFileSync(file,JSON.stringify({...legacy,...change}));assert.equal(readDesktopSession(file,{retained}),null);
+ }
+ writeFileSync(file,JSON.stringify(legacy));
+ assert.equal(readDesktopSession(file,{retained:retainedDesktopTarget(runtimeFile,{harness:'claude'},{...req,cwd:join(dir,'elsewhere')})}),null);
  writeFileSync(file,'{');assert.equal(readDesktopSession(file),null);
 });
 
 test('native desktop opener uses only registered executable, exact resume args and a durable one-attempt journal',async t=>{
  const dir=mkdtempSync(join(tmpdir(),'ihcp-open-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const file=join(dir,`local_${A}.json`),runtimeFile=join(dir,'runtime.json'),database=join(dir,'mail.db'),journalDir=join(dir,'attempts');
- const d={sessionId:`local_${A}`,cliSessionId:B,title:'Game',cwd:dir,isArchived:false,envScopeId:'builtin_local'};writeFileSync(file,JSON.stringify(d));
+ const project=join(dir,'game');mkdirSync(project);
+ const d={sessionId:`local_${A}`,cliSessionId:B,title:'Game',cwd:project,isArchived:false,envScopeId:'builtin_local'};writeFileSync(file,JSON.stringify(d));
  const db=new DatabaseSync(database);db.exec('CREATE TABLE harnesses(id TEXT,active INTEGER,config_json TEXT)');
  const executable=join(dir,process.platform==='win32'?'claude.exe':'claude');db.prepare('INSERT INTO harnesses VALUES(?,1,?)').run('claude',JSON.stringify({type:'claude',executable,cwd:dir}));db.close();writeFileSync(runtimeFile,JSON.stringify({database}));
  const calls=[],run=(exe,args,opts)=>{calls.push({exe,args,opts});return {status:0,stdout:'[]'};};
  const selected=readDesktopSession(file),h={harness:'claude'};
  assert.equal((await desktopOpener({runtimeFile,journalDir,tty:false,run})(h,selected,req)).status,'desktop_open_requires_tty');assert.equal(calls.length,0);
  const open=desktopOpener({runtimeFile,journalDir,tty:true,run});assert.equal((await open(h,selected,req)).status,'desktop_opened');
- assert.deepEqual(calls.at(-1).args,['--desktop','--resume',B]);assert.equal(calls.at(-1).exe,executable);assert.equal(calls.at(-1).opts.stdio,'inherit');
+ assert.deepEqual(calls.at(-1).args,['--desktop','--resume',B]);assert.equal(calls.at(-1).exe,executable);assert.equal(calls.at(-1).opts.stdio,'inherit');assert.equal(calls.at(-1).opts.cwd,project);
  assert.equal((await open(h,selected,req)).status,'desktop_open_uncertain');assert.equal(calls.filter(c=>c.args[0]==='--desktop').length,1);
  writeFileSync(file,JSON.stringify({...d,isArchived:true}));assert.equal((await open(h,selected,{...req,idempotency_key:'other'})).status,'desktop_identity_changed');
  writeFileSync(file,JSON.stringify(d));

@@ -187,6 +187,33 @@ test('operator config refresh preserves credentials, addresses and claims; races
  r.unregister(a);assert.equal(r.active(a),false);
 });
 
+test('only the sender can withdraw the exact never-claimed relay wake without reopening an uncertain inbox',async t=>{
+ const {store,r,a,b}=fixture(t);await r.discover(a);
+ const recipient=sessionAddress('beta','b1');
+ const body=JSON.stringify({type:'ihcp.desktop-wake.v1',target:{name:'Game',cwd:'/project'}});
+ const send=(key,payload=body)=>r.invoke(a,'request',{session_id:'a1',recipient,body:payload,idempotency_key:'resolve:'+key});
+ const first=await send('first');
+ const wake={id:'fixture',permissions:['wake'],recipients:[recipient]};
+ const notice=store.reserveWake(wake,{recipient});store.recordWake(wake,{recipient,...notice,result:'uncertain'});
+ const args={session_id:'a1',id:first.id,idempotency_key:'first'};
+ await assert.rejects(r.invoke(a,'withdrawWake',{...args,session_id:'a2'}),/FORBIDDEN/);
+ await assert.rejects(r.invoke(b,'withdrawWake',{...args,session_id:'b1'}),/FORBIDDEN/);
+ await assert.rejects(r.invoke(a,'withdrawWake',{...args,idempotency_key:'wrong'}),/WAKE_REQUEST_MISMATCH/);
+ assert.equal((await r.invoke(a,'withdrawWake',args)).status,'withdrawn');
+ assert.equal((await r.invoke(a,'withdrawWake',args)).duplicate,true);
+ assert.equal((await r.invoke(a,'requestStatus',{session_id:'a1',id:first.id})).withdrawn,true);
+ assert.equal((await send('first')).duplicate,true);
+ assert.equal(store.reserveWake(wake,{recipient}).state,'uncertain');
+ assert.deepEqual((await r.invoke(b,'claim',{session_id:'b1'})).messages,[]);
+ const second=await send('claimed');const [claim]=(await r.invoke(b,'claim',{session_id:'b1'})).messages;
+ const claimed={...args,id:second.id,idempotency_key:'claimed'};
+ await assert.rejects(r.invoke(a,'withdrawWake',claimed),/WAKE_ALREADY_CLAIMED_OR_SETTLED/);
+ await r.invoke(b,'release',{session_id:'b1',id:claim.id,generation:claim.generation,claim_token:claim.claim_token,work_started:false});
+ await assert.rejects(r.invoke(a,'withdrawWake',claimed),/WAKE_ALREADY_CLAIMED_OR_SETTLED/);
+ const ordinary=await send('ordinary','actual project work');
+ await assert.rejects(r.invoke(a,'withdrawWake',{...args,id:ordinary.id,idempotency_key:'ordinary'}),/NOT_A_DESKTOP_WAKE/);
+});
+
 test('failed own scan permits retained inbox and correlated replies, but never new identities or sends',async t=>{
  const {store,r,a,b,inventory}=fixture(t);await r.discover(a);
  const request=await r.invoke(b,'request',{session_id:'b1',recipient:sessionAddress('alpha','a1'),body:'read me',idempotency_key:'retained'});

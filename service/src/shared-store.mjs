@@ -162,11 +162,30 @@ export class SharedStore extends Store {
      return {...sent,request_id:original.id,recipient:request.reply_to};
    });
  }
+ withdrawWake(p,{id,idempotency_key}){
+   // Only the requesting session can retire its own never-claimed desktop relay.
+   // Keep the idempotency tombstone and leave the mailbox's wake fence alone.
+   const outcome='withdrawn_unclaimed_desktop_wake';
+   return this.transaction(()=>{
+     const row=this.db.prepare('SELECT m.*,q.reply_to FROM requests q JOIN messages m ON m.id=q.message_id WHERE m.id=?').get(id);
+     check(row,'NOT_FOUND');
+     check(row.sender===this.ownEndpoint(p)&&row.reply_to===row.sender,'FORBIDDEN');
+     check(row.dedup_key==='resolve:'+idempotency_key,'WAKE_REQUEST_MISMATCH');
+     if(row.state==='completed'&&row.outcome===outcome)return {id,status:'withdrawn',duplicate:true};
+     check(row.state==='pending'&&row.generation===0,'WAKE_ALREADY_CLAIMED_OR_SETTLED');
+     let body;
+     try{body=JSON.parse(row.body);}catch{check(false,'NOT_A_DESKTOP_WAKE');}
+     check(body?.type==='ihcp.desktop-wake.v1','NOT_A_DESKTOP_WAKE');
+     this.db.prepare("UPDATE messages SET state='completed',body=NULL,outcome=?,completed_at=? WHERE id=?").run(outcome,this.now(),id);
+     this.db.prepare("UPDATE outbox SET state='done' WHERE message_id=?").run(id);
+     return {id,status:'withdrawn',duplicate:false};
+   });
+ }
  requestStatus(p,{id}){
-   const row=this.db.prepare('SELECT r.*,m.sender,m.recipient,m.state FROM requests r JOIN messages m ON m.id=r.message_id WHERE r.message_id=?').get(id);
+   const row=this.db.prepare('SELECT r.*,m.sender,m.recipient,m.state,m.outcome FROM requests r JOIN messages m ON m.id=r.message_id WHERE r.message_id=?').get(id);
    check(row,'NOT_FOUND');this.scope(p,'claim',row.reply_to);
    const reply=this.db.prepare('SELECT m.id,m.state FROM replies r JOIN messages m ON m.id=r.message_id WHERE r.request_message_id=?').get(id);
-   return {id,state:row.state,recipient:row.recipient,reply:reply??null};
+   return {id,state:row.state,recipient:row.recipient,reply:reply??null,...(row.outcome==='withdrawn_unclaimed_desktop_wake'?{withdrawn:true}:{})};
  }
  claim(p,args){return this.transaction(()=>super.claim(p,args).map(message=>{
    const request=this.db.prepare('SELECT reply_to FROM requests WHERE message_id=?').get(message.id);

@@ -61,6 +61,10 @@ Setup now reuses verified local packages and keeps lifecycle/destructive tests o
 
 This page distinguishes automated tests from checks performed in real agent applications. A **fixture** is controlled test data or a simulated app response; a **rehearsal** exercises a specific real workflow. Neither proves compatibility with every app version. Technical terms are defined in [terminology](terminology.md).
 
+## Version 1.5.3: suspended Claude Desktop resolution
+
+All 166 pinned-Docker release tests passed. Regressions cover a previously discovered exact Desktop session whose saved record omits the scope field, rejection of explicit remote/ambiguous/changed bindings, project-scoped native launch, and bounded identity verification after an uncertain exit or a changed native UUID. They also exercise sender-only withdrawal of an exact never-claimed relay request, preserving uncertain notification fences. The saved SpaceGame identity matched the retained real Windows discovery record in a read-only probe. That probe does not establish native wake or progress-message receipt.
+
 ## Version 1.5.2: decision and approval replies
 
 The pinned Docker release suite passed all 165 tests. The documented question and continuation examples parse as JSON and use a matching stable option ID. This release changes the shared skill and protocol guidance. It uses existing correlated replies and keeps native approval requirements and the SQLite schema unchanged. A live end-to-end decision relay is separate from these checks.

@@ -15,16 +15,43 @@ export function desktopRoots({platform=process.platform,env=process.env,home=hom
  if(platform==='darwin')return [path.join(home,'Library','Application Support','Claude','claude-code-sessions')];
  return []; // No claimed Linux desktop support.
 }
-export function readDesktopSession(file){
+function samePath(first,second){
+ if(typeof first!=='string'||typeof second!=='string'||!path.isAbsolute(first)||!path.isAbsolute(second))return false;
+ const normalize=value=>process.platform==='win32'?path.resolve(value).toLowerCase():path.resolve(value);
+ return normalize(first)===normalize(second);
+}
+
+// Historical evidence only qualifies the exact requested chat. Unknown scope
+// alone never qualifies a record, and explicitly remote scopes stay rejected.
+export function retainedDesktopTarget(runtimeFile,harness,input){
+ if(!input.cwd||!path.isAbsolute(input.cwd))return ()=>false;
+ const runtime=JSON.parse(fs.readFileSync(runtimeFile,'utf8'));
+ const db=new DatabaseSync(runtime.database,{readOnly:true});
+ let rows;
+ try{
+  const registration=db.prepare('SELECT config_json FROM harnesses WHERE id=? AND active=1').get(harness.harness);
+  if(!registration||JSON.parse(registration.config_json).type!=='claude')return ()=>false;
+  rows=db.prepare('SELECT native_id,label,cwd FROM harness_sessions WHERE harness=? AND lower(label)=lower(?)').all(harness.harness,input.name);
+ }finally{db.close();}
+ const matching=rows.filter(row=>samePath(row.cwd,input.cwd));
+ return record=>matching.length===1&&matching[0].native_id===record.native_id&&
+   matching[0].label.toLowerCase()===record.label.toLowerCase()&&samePath(matching[0].cwd,record.cwd)&&
+   (!input.desktop_id||input.desktop_id===record.desktop_id);
+}
+
+export function readDesktopSession(file,{retained=()=>false}={}){
  try{
   const stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>2*1024*1024)return null;
   const d=JSON.parse(fs.readFileSync(file,'utf8'));
-  if(!local.test(d.sessionId)||!uuid.test(d.cliSessionId)||path.basename(file)!==d.sessionId+'.json'||d.isArchived!==false||d.envScopeId!=='builtin_local'||d.startedFromEnvironmentId||!text(d.title)||!text(d.cwd)||!path.isAbsolute(d.cwd))return null;
+  if(!local.test(d.sessionId)||!uuid.test(d.cliSessionId)||path.basename(file)!==d.sessionId+'.json'||d.isArchived!==false||d.startedFromEnvironmentId||!text(d.title)||!text(d.cwd)||!path.isAbsolute(d.cwd))return null;
+  const record={native_id:d.cliSessionId,desktop_id:d.sessionId,label:d.title,cwd:d.cwd,file};
+  const legacy=d.envScopeId===undefined&&d.startedFromEnvironmentId===null&&samePath(d.originCwd,d.cwd)&&retained(record);
+  if(d.envScopeId!=='builtin_local'&&!legacy)return null;
   // Project only identity fields. Never return prompt/permission snapshots or change app state.
-  return {native_id:d.cliSessionId,desktop_id:d.sessionId,label:d.title,cwd:d.cwd,file};
+  return record;
  }catch{return null;}
 }
-export function desktopSessions({roots=desktopRoots()}={}){
+export function desktopSessions({roots=desktopRoots(),retained}={}){
  const rows=[];let count=0,bytes=0;
  for(const root of roots){
   try{const stat=fs.lstatSync(root);if(!stat.isDirectory()||stat.isSymbolicLink())continue;}catch{continue;}
@@ -36,7 +63,7 @@ export function desktopSessions({roots=desktopRoots()}={}){
     for(const name of names.filter(n=>local.test(n.replace(/\.json$/,''))&&n.endsWith('.json'))){
      const file=path.join(account,name);let stat;try{stat=fs.lstatSync(file);}catch{throw Error('DESKTOP_METADATA_CHANGED');}
      if((bytes+=stat.size)>256*1024*1024)throw Error('DESKTOP_METADATA_LIMIT');
-     const row=readDesktopSession(file);if(row)rows.push(row);
+     const row=readDesktopSession(file,{retained});if(row)rows.push(row);
     }
    }
   }
@@ -48,7 +75,10 @@ export function desktopSessions({roots=desktopRoots()}={}){
 export function desktopOpener({runtimeFile,journalDir,tty=!!process.stdin.isTTY&&!!process.stdout.isTTY,run=spawnSync,now=Date.now}={}){
  return async(harness,target,input)=>{
   if(!tty)return {status:'desktop_open_requires_tty'};
-  const fresh=readDesktopSession(target.file);
+  // The retained lookup runs only for a structurally valid record with missing
+  // scope. Both the record and its evidence are rechecked before launch.
+  const readTarget=()=>readDesktopSession(target.file,{retained:record=>retainedDesktopTarget(runtimeFile,harness,input)(record)});
+  const fresh=readTarget();
   if(!fresh||JSON.stringify(fresh)!==JSON.stringify(target))return {status:'desktop_identity_changed'};
   const runtime=JSON.parse(fs.readFileSync(runtimeFile,'utf8'));
   const db=new DatabaseSync(runtime.database,{readOnly:true});let config;
@@ -68,10 +98,10 @@ export function desktopOpener({runtimeFile,journalDir,tty=!!process.stdin.isTTY&
   const file=path.join(journalDir,key+'.json');
   if(fs.existsSync(file))return {status:'desktop_open_uncertain'};
   if(fs.readdirSync(journalDir).length>=1000)throw Error('WAKE_JOURNAL_CAPACITY');
-  if(JSON.stringify(readDesktopSession(target.file))!==JSON.stringify(target))return {status:'desktop_identity_changed'};
+  if(JSON.stringify(readTarget())!==JSON.stringify(target))return {status:'desktop_identity_changed'};
   let fd;try{fd=fs.openSync(file,'wx',0o600);fs.writeFileSync(fd,JSON.stringify({native_id:target.native_id,desktop_id:target.desktop_id,attempted_at:now(),state:'attempted'}));fs.fsyncSync(fd);}catch(e){if(e.code==='EEXIST')return {status:'desktop_open_uncertain'};throw e;}finally{if(fd!==undefined)fs.closeSync(fd);}
   // Inherit the host's PTY. No prompt, new worker, shell, permission changes or resume-copy flags.
-  const r=run(config.executable,['--desktop','--resume',target.native_id],{cwd:config.cwd,env,windowsHide:true,stdio:'inherit',timeout:15000});
+  const r=run(config.executable,['--desktop','--resume',target.native_id],{cwd:target.cwd,env,windowsHide:true,stdio:'inherit',timeout:15000});
   return {status:!r.error&&r.status===0?'desktop_opened':'desktop_open_uncertain'};
  };
 }

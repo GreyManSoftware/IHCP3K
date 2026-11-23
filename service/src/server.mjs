@@ -70,6 +70,7 @@ const harnessSchemas={
  'session.unattend':{session_id:z.string().min(1).max(256),attendance_token:z.string().uuid()},
  'session.send':{session_id:z.string().min(1).max(256),...schemas['mail.send']},
  'session.reply':{session_id:z.string().min(1).max(256),...schemas['mail.reply']},
+ 'session.withdraw_wake':{session_id:z.string().min(1).max(256),id:z.string().uuid(),idempotency_key:z.string().min(1).max(150)},
  'session.request_status':{session_id:z.string().min(1).max(256),...schemas['mail.request_status']},
  'session.claim':{session_id:z.string().min(1).max(256),limit:z.number().int().min(1).max(20).default(10),lease_s:z.number().int().min(1).max(300).default(300)},
  'session.status':{session_id:z.string().min(1).max(256)},
@@ -81,12 +82,12 @@ const harnessSchemas={
  'session.worker_wait':{session_id:z.string().min(1).max(256),...schemas['worker.wait']},
  'session.worker_ack':{session_id:z.string().min(1).max(256),...schemas['worker.ack']}
 };
-const sessionMethods={request_status:'requestStatus'};
+const sessionMethods={request_status:'requestStatus',withdraw_wake:'withdrawWake'};
 function equal(a,b) { const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length===bb.length && timingSafeEqual(aa,bb); }
 function reject(res,code,error) { res.writeHead(code,{'Content-Type':'application/json'});res.end(JSON.stringify({error})); }
 
 export function createToolServer(store,directory,principal,abort=new AbortController(),resolvePrincipal=()=>principal){
-    const version='1.5.2';
+    const version='1.5.3';
     const server=new McpServer({name:'ihcp3k',version});
     if(store.harnesses)for(const [name,inputSchema] of Object.entries(harnessSchemas)){
       if(name.startsWith('session.worker_')&&!store.workers)continue;

@@ -5,7 +5,7 @@ description: Set up, update, register, unregister or inspect IHCP3K; discover co
 
 # Harness interop
 
-Use IHCP3K **1.5.2**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
+Use IHCP3K **1.5.3**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
 
 ## Choose the communication route
 
@@ -110,6 +110,8 @@ For idle Codex, the inspected queue interface has no supported hidden-message op
 An unloaded Claude Desktop chat is not necessarily missing. For an authorized cross-harness request, run `node <app>/scripts/ihcp.mjs resolve <harness-dir> <private-target.json>` with the host's PTY option (Codex `exec_command` uses `tty:true`). Input: `{session_id,harness,name,cwd?,desktop_id?,idempotency_key}`. Include the known project folder. The helper automatically opens an exact existing, non-archived local desktop chat when necessary and verifies its native identity. It can bootstrap one existing desktop chat when all are suspended. Do not ask the user to open the target manually when this route is available. See [native adapters](../../docs/native-adapters.md#unloaded-claude-desktop-targets).
 
 For `desktop_open_requires_tty`, rerun the same helper with a host PTY; no open has occurred yet. Do not create replacement chats, use `--bg --resume`, change native permissions, inject UI messages, or edit desktop metadata. Missing PTY support, unknown metadata layouts, ambiguous identities and `desktop_open_uncertain` are genuine limitations, not reasons to guess or loop. Keep the same idempotency key; uncertainty never authorizes another launch.
+
+When an unread relay is stuck and an exact direct route is now verified, use `withdraw-wake` on the original requester with the exact request ID and original resolve key before changing routes. Never withdraw or retry an already-claimed relay, or reset an uncertain inbox merely to force another attempt. See [usage](../../docs/usage.md).
 
 `found` returns the verified destination. Send the original request exactly once with its stable idempotency key and await the correlated reply. For `wake_requested`, retain `request_id`, handle its correlated native-desktop relay reply, then rerun resolution with `wake_request_id` and the returned `desktop_id`. Do not ask the user to poll or resend. A temporary CLI notifier is not a desktop session-management API; do not claim its successful exit alone woke a suspended chat.
 

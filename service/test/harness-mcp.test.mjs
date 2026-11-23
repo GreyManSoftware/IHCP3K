@@ -39,6 +39,10 @@ test('one harness MCP configuration serves separate sessions; revocation applies
  await call(a,'session.worker_wait',{session_id:'alpha-1',id:job.id,timeout_ms:1000});
  const deniedWorker=await b.callTool({name:'session.worker_start',arguments:{session_id:'beta-1',adapter:'reader',prompt:'no grant',idempotency_key:'denied'}});assert.equal(deniedWorker.isError,true);
  assert.equal((await call(a,'session.worker_ack',{session_id:'alpha-1',id:job.id})).acknowledged,true);
+ const relayWake=await call(a,'session.request',{session_id:'alpha-1',recipient:sessionAddress('beta','beta-2'),body:JSON.stringify({type:'ihcp.desktop-wake.v1'}),idempotency_key:'resolve:old-wake'});
+ const withdrawn=await call(a,'session.withdraw_wake',{session_id:'alpha-1',id:relayWake.id,idempotency_key:'old-wake'});
+ assert.equal(withdrawn.status,'withdrawn');
+ assert.equal((await call(a,'session.request_status',{session_id:'alpha-1',id:relayWake.id})).withdrawn,true);
  const req=await call(a,'session.request',{session_id:'alpha-1',recipient:sessionAddress('beta','beta-2'),body:'question',idempotency_key:'ask'});
  const got=(await call(b,'session.claim',{session_id:'beta-2'})).messages[0];assert.equal(got.id,req.id);
  await call(b,'session.reply',{session_id:'beta-2',id:got.id,claim_token:got.claim_token,generation:got.generation,body:'answer',idempotency_key:'answer'});

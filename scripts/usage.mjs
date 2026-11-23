@@ -10,6 +10,7 @@ export const commands = {
   discover: ['<harness-dir> [query.json]', 'List connected sessions this identity may contact.'],
   resolve: ['<harness-dir> <target.json>', 'Resolve and wake a named target; use a PTY so an existing Claude desktop chat can be opened automatically when all chats are suspended.'],
   remote_prompt: ['<harness-dir> <request.json>', 'Send to an existing recipient, or run one nonpersistent worker on a registered harness and return its answer. New work JSON: {session_id,harness,prompt,allow_new_session:true,idempotency_key,working_folder?,model?,context?}. Read-only; 180-second default, 300-second maximum timeout_ms.'],
+  'withdraw-wake': ['<harness-dir> <wake.json>', 'Withdraw your own never-claimed desktop wake request using its exact ID and original resolve key.'],
   status: ['<harness-dir> <source-session-or-request.json>', 'Check inbox counts, or one request when an ID file is supplied.'],
   check: ['<harness-dir> <source-session.json>', 'Claim waiting messages for this session to handle.'],
   reply: ['<harness-dir> <reply.json>', 'Reply to a claimed request.'],
@@ -29,7 +30,7 @@ export const commands = {
   unattend: ['<harness-dir> <attendance.json>', 'Release this session\'s listener lease using its returned token.']
 };
 export const aliases = {prompt:'remote_prompt',chat:'remote_prompt',request:'remote_prompt',unlink:'unregister',upgrade:'update'};
-const minimumArgs = {configure:2,profile:2,enroll:3,register:3,'register-session':4,remote_prompt:2,resolve:2,reply:2,send:2,complete:2,renew:2,release:2,inspect:2,worker:2,'worker-status':2,'worker-ack':2,exchange:2,wait:2,listen:2,unattend:2};
+const minimumArgs = {'withdraw-wake':2,configure:2,profile:2,enroll:3,register:3,'register-session':4,remote_prompt:2,resolve:2,reply:2,send:2,complete:2,renew:2,release:2,inspect:2,worker:2,'worker-status':2,'worker-ack':2,exchange:2,wait:2,listen:2,unattend:2};
 export function parseInvocation(args) {
   const raw=args[0]?.replace(/^\//,'');
   const globalHelp=!raw||['help','--help','-h','?'].includes(raw);
