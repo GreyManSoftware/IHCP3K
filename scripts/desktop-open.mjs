@@ -21,6 +21,49 @@ function samePath(first,second){
  return normalize(first)===normalize(second);
 }
 
+// Per-chat local evidence. A live native registration on this machine (~/.claude/sessions,
+// entrypoint claude-desktop) whose CLI UUID matches the Desktop record proves that exact chat ran
+// locally. Its stable desktop ID, name, project and account folder are kept privately so a
+// later CLI UUID rotation can still be verified. Nothing else (field names, a marked sibling,
+// an existing folder) counts as locality evidence.
+const EVIDENCE_LIMIT=2000;
+const evidenceFile=runtimeFile=>path.join(path.dirname(path.resolve(runtimeFile)),'desktop-evidence.json');
+export function readDesktopEvidence(file){
+ try{const stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>4*1024*1024)return {};
+  const d=JSON.parse(fs.readFileSync(file,'utf8'));return d?.version===1&&d.entries&&typeof d.entries==='object'?d.entries:{};}catch{return {};}
+}
+function desktopRecordFile(roots,desktopId){
+ const found=[];
+ for(const root of roots){
+  try{const stat=fs.lstatSync(root);if(!stat.isDirectory()||stat.isSymbolicLink())continue;}catch{continue;}
+  for(const org of directories(root).filter(d=>uuid.test(path.basename(d))).slice(0,32))
+   for(const account of directories(org).filter(d=>uuid.test(path.basename(d))).slice(0,32)){
+    const file=path.join(account,desktopId+'.json');try{if(fs.lstatSync(file).isFile())found.push(file);}catch{}
+   }
+ }
+ return found;
+}
+// observations: [{desktop_id,name,cwd,native_id}] from live, binding-verified sessions only.
+export function recordDesktopEvidence(file,observations,{roots=desktopRoots(),now=Date.now}={}){
+ const entries=readDesktopEvidence(file);let changed=false;
+ for(const o of observations){
+  if(!local.test(o.desktop_id??'')||!uuid.test(o.native_id??'')||!text(o.name)||!text(o.cwd))continue;
+  const files=desktopRecordFile(roots,o.desktop_id);if(files.length!==1)continue;
+  let parsed;try{parsed=parseDesktopSession(files[0]);}catch{continue;}
+  const r=parsed?.record;
+  if(!r||r.native_id!==o.native_id||r.label!==o.name||!samePath(r.cwd,o.cwd))continue;
+  entries[o.desktop_id]={name:r.label,cwd:r.cwd,account:path.dirname(files[0]),cli_session_id:r.native_id,seen_at:now()};changed=true;
+ }
+ if(!changed)return false;
+ const kept=Object.entries(entries).sort((x,y)=>(y[1].seen_at??0)-(x[1].seen_at??0)).slice(0,EVIDENCE_LIMIT);
+ const tmp=file+'.'+process.pid+'.tmp';
+ fs.writeFileSync(tmp,JSON.stringify({version:1,entries:Object.fromEntries(kept)}),{mode:0o600});fs.renameSync(tmp,file);
+ return true;
+}
+export function desktopEvidenceRecorder(runtimeFile,options){
+ return observations=>recordDesktopEvidence(evidenceFile(runtimeFile),observations,options);
+}
+
 // Historical evidence only qualifies the exact requested chat. Unknown scope
 // alone never qualifies a record, and explicitly remote scopes stay rejected.
 export function retainedDesktopTarget(runtimeFile,harness,input){
@@ -34,15 +77,16 @@ export function retainedDesktopTarget(runtimeFile,harness,input){
   rows=db.prepare('SELECT native_id,label,cwd FROM harness_sessions WHERE harness=? AND lower(label)=lower(?)').all(harness.harness,input.name);
  }finally{db.close();}
  const matching=rows.filter(row=>samePath(row.cwd,input.cwd));
- return record=>matching.length===1&&matching[0].native_id===record.native_id&&
-   matching[0].label.toLowerCase()===record.label.toLowerCase()&&samePath(matching[0].cwd,record.cwd)&&
-   (!input.desktop_id||input.desktop_id===record.desktop_id);
+ const evidence=readDesktopEvidence(evidenceFile(runtimeFile));
+ const exact=record=>record.label.toLowerCase()===String(input.name).toLowerCase()&&samePath(record.cwd,input.cwd)&&(!input.desktop_id||input.desktop_id===record.desktop_id);
+ return record=>exact(record)&&(
+   (matching.length===1&&matching[0].native_id===record.native_id&&matching[0].label.toLowerCase()===record.label.toLowerCase()&&samePath(matching[0].cwd,record.cwd))||
+   (()=>{const e=evidence[record.desktop_id];return !!e&&e.name===record.label&&samePath(e.cwd,record.cwd)&&samePath(e.account,path.dirname(record.file));})());
 }
 
-// Older Desktop records carry no envScopeId. One counts as local only when nothing in it
-// points elsewhere and either IHCP3K saw this exact chat before (retained) or its account
-// folder also holds explicitly builtin_local records and its project folder exists here.
-// An explicit non-local scope or an environment origin is always rejected.
+// Older Desktop records carry no envScopeId. Such a record qualifies only through
+// per-chat evidence (retained). An explicit non-local scope or an environment origin
+// is always rejected.
 function parseDesktopSession(file){
  const stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>2*1024*1024)return null;
  const d=JSON.parse(fs.readFileSync(file,'utf8'));
@@ -54,17 +98,10 @@ function parseDesktopSession(file){
  const unmarked=d.envScopeId===undefined&&(d.startedFromEnvironmentId===undefined||d.startedFromEnvironmentId===null)&&(d.originCwd===undefined||samePath(d.originCwd,d.cwd));
  return unmarked?{record,marked:false}:null;
 }
-const isLocalDirectory=dir=>{try{const s=fs.statSync(dir);return s.isDirectory();}catch{return false;}};
-export function accountHasLocalRecords(account){
- let names;try{names=fs.readdirSync(account);}catch{return false;}
- if(names.length>10000)return false;
- return names.some(n=>{if(!n.endsWith('.json')||!local.test(n.replace(/\.json$/,'')))return false;try{return parseDesktopSession(path.join(account,n))?.marked===true;}catch{return false;}});
-}
-export function readDesktopSession(file,{retained=()=>false,localAccount=false}={}){
+export function readDesktopSession(file,{retained=()=>false}={}){
  try{
   const parsed=parseDesktopSession(file);if(!parsed)return null;
-  if(parsed.marked)return parsed.record;
-  return retained(parsed.record)||(localAccount&&isLocalDirectory(parsed.record.cwd))?parsed.record:null;
+  return parsed.marked||retained(parsed.record)?parsed.record:null;
  }catch{return null;}
 }
 export function desktopSessions({roots=desktopRoots(),retained}={}){
@@ -76,14 +113,11 @@ export function desktopSessions({roots=desktopRoots(),retained}={}){
    const accounts=directories(org);if(accounts.length>32)throw Error('DESKTOP_METADATA_LIMIT');
    for(const account of accounts.filter(d=>uuid.test(path.basename(d)))){
     const names=fs.readdirSync(account);if((count+=names.length)>10000)throw Error('DESKTOP_METADATA_LIMIT');
-    const parsed=[];
     for(const name of names.filter(n=>local.test(n.replace(/\.json$/,''))&&n.endsWith('.json'))){
      const file=path.join(account,name);let stat;try{stat=fs.lstatSync(file);}catch{throw Error('DESKTOP_METADATA_CHANGED');}
      if((bytes+=stat.size)>256*1024*1024)throw Error('DESKTOP_METADATA_LIMIT');
-     try{const p=parseDesktopSession(file);if(p)parsed.push(p);}catch{}
+     const row=readDesktopSession(file,{retained});if(row)rows.push(row);
     }
-    const localAccount=parsed.some(p=>p.marked);
-    for(const p of parsed)if(p.marked||(retained&&retained(p.record))||(localAccount&&isLocalDirectory(p.record.cwd)))rows.push(p.record);
    }
   }
  }
@@ -96,7 +130,7 @@ export function desktopOpener({runtimeFile,journalDir,tty=!!process.stdin.isTTY&
   if(!tty)return {status:'desktop_open_requires_tty'};
   // The retained lookup runs only for a structurally valid record with missing
   // scope. Both the record and its evidence are rechecked before launch.
-  const readTarget=()=>readDesktopSession(target.file,{retained:record=>retainedDesktopTarget(runtimeFile,harness,input)(record),localAccount:accountHasLocalRecords(path.dirname(target.file))});
+  const readTarget=()=>readDesktopSession(target.file,{retained:record=>retainedDesktopTarget(runtimeFile,harness,input)(record)});
   const fresh=readTarget();
   if(!fresh||JSON.stringify(fresh)!==JSON.stringify(target))return {status:'desktop_identity_changed'};
   const runtime=JSON.parse(fs.readFileSync(runtimeFile,'utf8'));

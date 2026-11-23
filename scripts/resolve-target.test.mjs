@@ -4,7 +4,7 @@ import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {resolveTarget,desktopBindings} from './resolve-target.mjs';
-import {desktopSessions,readDesktopSession,desktopOpener,retainedDesktopTarget,accountHasLocalRecords} from './desktop-open.mjs';
+import {desktopSessions,readDesktopSession,desktopOpener,retainedDesktopTarget,recordDesktopEvidence,readDesktopEvidence} from './desktop-open.mjs';
 import {DatabaseSync} from 'node:sqlite';
 const A='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',B='bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
 const req={session_id:A,harness:'Claude',name:'Game',cwd:'E:/Projects/Game',idempotency_key:'wake-game'};
@@ -127,22 +127,49 @@ test('desktop bootstrap opens one relay when target is not in metadata; never ch
  assert.equal(g.calls.filter(c=>c.name==='session.request').length,1);
 });
 
-test('unmarked desktop records count as local only in an account with marked local records and an existing project folder',t=>{
+test('resolution records live verified evidence and reports a metadata cap distinctly',async()=>{
+ const seen=[];const f=fixture();
+ const r=await resolveTarget(null,req,{...f.options,remember:o=>seen.push(...o),desktop:()=>{throw Error('DESKTOP_METADATA_LIMIT');},openDesktop:async()=>assert.fail('no open')});
+ assert.equal(r.status,'wake_requested');assert.equal(r.desktop_metadata,'limit');
+ assert.deepEqual(seen,[{desktop_id:`local_${B}`,name:relay.label,cwd:relay.cwd,native_id:B}]);
+ const g=fixture();g.records.clear();
+ assert.equal((await resolveTarget(null,req,{...g.options,desktop:()=>{throw Error('DESKTOP_METADATA_LIMIT');},openDesktop:async()=>assert.fail('no open')})).status,'desktop_metadata_limit');
+});
+test('an unmarked record needs per-chat evidence: a marked sibling and a local-looking folder never qualify it',async t=>{
  const dir=mkdtempSync(join(tmpdir(),'ihcp-desktop-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const account=join(dir,A,B),project=join(dir,'project');mkdirSync(account,{recursive:true});mkdirSync(project);
  const C='cccccccc-cccc-4ccc-cccc-cccccccccccc',D='dddddddd-dddd-4ddd-dddd-dddddddddddd';
- const put=(id,cli,fields)=>{const file=join(account,`local_${id}.json`);writeFileSync(file,JSON.stringify({sessionId:`local_${id}`,cliSessionId:cli,title:'Old chat',cwd:project,isArchived:false,...fields}));return file;};
- const old=put(C,D,{originCwd:project});
- // Without any explicitly local record in the account, an unmarked record is never trusted.
- assert.deepEqual(desktopSessions({roots:[dir]}),[]);assert.equal(accountHasLocalRecords(account),false);
- put(A,B,{title:'Marked',envScopeId:'builtin_local',startedFromEnvironmentId:null});
- assert.equal(accountHasLocalRecords(account),true);
- assert.deepEqual(desktopSessions({roots:[dir]}).map(r=>r.desktop_id).sort(),[`local_${A}`,`local_${C}`]);
- assert.equal(readDesktopSession(old,{localAccount:true}).native_id,D);assert.equal(readDesktopSession(old),null);
- for(const change of [{envScopeId:'ssh'},{envScopeId:null},{startedFromEnvironmentId:'cloud'},{originCwd:join(dir,'elsewhere')},{cwd:join(dir,'missing')},{isArchived:true}]){
-  writeFileSync(old,JSON.stringify({sessionId:`local_${C}`,cliSessionId:D,title:'Old chat',cwd:project,isArchived:false,originCwd:project,...change}));
-  assert.equal(readDesktopSession(old,{localAccount:true}),null);assert.deepEqual(desktopSessions({roots:[dir]}).map(r=>r.desktop_id),[`local_${A}`]);
+ const put=(id,cli,fields)=>{const file=join(account,`local_${id}.json`);writeFileSync(file,JSON.stringify({sessionId:`local_${id}`,cliSessionId:cli,title:'Game',cwd:project,isArchived:false,...fields}));return file;};
+ const old=put(C,D,{originCwd:project});put(A,B,{title:'Marked',cwd:project,envScopeId:'builtin_local',startedFromEnvironmentId:null});
+ assert.deepEqual(desktopSessions({roots:[dir]}).map(r=>r.desktop_id),[`local_${A}`]);assert.equal(readDesktopSession(old),null);
+ const f=fixture();let opened=0;
+ const r=await resolveTarget(null,{...req,cwd:project},{...f.options,desktop:()=>desktopSessions({roots:[dir]}),openDesktop:async()=>{opened++;return {status:'desktop_opened'};}});
+ assert.equal(r.status,'wake_requested');assert.equal(opened,0);
+});
+test('live verified Desktop sessions record per-chat evidence that survives CLI UUID rotation',t=>{
+ const dir=mkdtempSync(join(tmpdir(),'ihcp-desktop-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const account=join(dir,'sessions',A,B),project=join(dir,'project');mkdirSync(account,{recursive:true});mkdirSync(project);
+ const C='cccccccc-cccc-4ccc-cccc-cccccccccccc',D='dddddddd-dddd-4ddd-dddd-dddddddddddd',E='eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee';
+ const file=join(account,`local_${C}.json`),base={sessionId:`local_${C}`,cliSessionId:D,title:'Game',cwd:project,isArchived:false,originCwd:project};
+ writeFileSync(file,JSON.stringify(base));
+ const database=join(dir,'mail.db'),runtimeFile=join(dir,'runtime.json'),evidence=join(dir,'desktop-evidence.json'),roots=[join(dir,'sessions')];
+ const db=new DatabaseSync(database);db.exec('CREATE TABLE harnesses(id TEXT,active INTEGER,config_json TEXT); CREATE TABLE harness_sessions(harness TEXT,native_id TEXT,label TEXT,cwd TEXT)');
+ db.prepare('INSERT INTO harnesses VALUES(?,1,?)').run('claude',JSON.stringify({type:'claude'}));db.close();writeFileSync(runtimeFile,JSON.stringify({database}));
+ const input={...req,cwd:project},retained=()=>retainedDesktopTarget(runtimeFile,{harness:'claude'},input);
+ assert.equal(readDesktopSession(file,{retained:retained()}),null);
+ // A mismatched live CLI UUID records nothing.
+ assert.equal(recordDesktopEvidence(evidence,[{desktop_id:`local_${C}`,name:'Game',cwd:project,native_id:E}],{roots}),false);
+ assert.equal(recordDesktopEvidence(evidence,[{desktop_id:`local_${C}`,name:'Game',cwd:project,native_id:D}],{roots,now:()=>1}),true);
+ assert.equal(readDesktopEvidence(evidence)[`local_${C}`].account,account);
+ // The CLI UUID rotates; the stable desktop ID, name, project and account still verify the exact chat.
+ writeFileSync(file,JSON.stringify({...base,cliSessionId:E}));assert.equal(readDesktopSession(file,{retained:retained()}).native_id,E);
+ assert.equal(readDesktopSession(file,{retained:retainedDesktopTarget(runtimeFile,{harness:'claude'},{...input,name:'Other'})}),null);
+ for(const change of [{title:'Renamed'},{cwd:join(dir,'elsewhere'),originCwd:join(dir,'elsewhere')},{envScopeId:'ssh'}]){
+  writeFileSync(file,JSON.stringify({...base,cliSessionId:E,...change}));assert.equal(readDesktopSession(file,{retained:retained()}),null);
  }
+ // The same desktop ID in a different account folder is not the recorded chat.
+ const other=join(dir,'sessions',A,'ffffffff-ffff-4fff-8fff-ffffffffffff');mkdirSync(other);rmSync(file);
+ writeFileSync(join(other,`local_${C}.json`),JSON.stringify({...base,cliSessionId:E}));assert.equal(readDesktopSession(join(other,`local_${C}.json`),{retained:retained()}),null);
 });
 test('desktop state reader excludes archived, remote, malformed and ambiguous metadata without writing it',t=>{
  const dir=mkdtempSync(join(tmpdir(),'ihcp-desktop-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));

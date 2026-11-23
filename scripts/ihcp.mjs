@@ -7,7 +7,7 @@ import {spawnSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {parseInvocation} from './usage.mjs';
 import {resolveTarget} from './resolve-target.mjs';
-import {desktopOpener,desktopSessions,retainedDesktopTarget} from './desktop-open.mjs';
+import {desktopOpener,desktopSessions,retainedDesktopTarget,desktopEvidenceRecorder} from './desktop-open.mjs';
 import {listenInbox} from './listen-inbox.mjs';
 import {update} from './update.mjs';
 import {observeNativeProfile} from '../service/src/native-profile.mjs';
@@ -170,6 +170,7 @@ export async function main(args=process.argv.slice(2)){
      if(mode==='resolve')return resolveTarget(c,read(input),{
        invoke:call,
        preferredRelays:read(harness.runtime_file).desktop_relay_preference??[],
+       remember:desktopEvidenceRecorder(harness.runtime_file),
        desktop:(target,request)=>desktopSessions({retained:retainedDesktopTarget(harness.runtime_file,target,request)}),
        openDesktop:desktopOpener({runtimeFile:harness.runtime_file,journalDir:path.join(dir,'wake-attempts')})
      });

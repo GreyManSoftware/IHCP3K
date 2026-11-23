@@ -34,7 +34,7 @@ export function desktopBindings(directory=join(homedir(),'.claude','sessions')) 
 
 // Uses existing MCP operations. No new runtime, credentials, worker or background service.
 // The caller retains the correlated reply and returns here after the native wake.
-export async function resolveTarget(client,input,{invoke,bindings=desktopBindings,desktop=desktopSessions,openDesktop,preferredRelays=[],wait=ms=>new Promise(r=>setTimeout(r,ms))}={}) {
+export async function resolveTarget(client,input,{invoke,bindings=desktopBindings,desktop=desktopSessions,openDesktop,preferredRelays=[],remember,wait=ms=>new Promise(r=>setTimeout(r,ms))}={}) {
   const {session_id,harness,name,cwd,desktop_id,idempotency_key,wake_request_id}=input;
   if(!text(session_id)||!text(harness,100)||!text(name,200)||!text(idempotency_key,150)||
     (cwd!==undefined&&!text(cwd,4096))||(desktop_id!==undefined&&!desktopId.test(desktop_id))||
@@ -50,6 +50,8 @@ export async function resolveTarget(client,input,{invoke,bindings=desktopBinding
     records??=bindings();const d=records.get(s.native_id);
     return d&&d.name===s.label&&samePath(d.cwd,s.cwd)?d:undefined;
   };
+  // Record per-chat local evidence from live, binding-verified Desktop sessions (best effort).
+  if(remember&&targetHarness.type==='claude')try{remember(targetHarness.sessions.map(s=>{const d=record(s);return d&&{desktop_id:d.desktop_id,name:s.label,cwd:s.cwd,native_id:s.native_id};}).filter(Boolean));}catch{}
   const targets=targetHarness.sessions.filter(s=>same(s.label,name)&&(!cwd||samePath(s.cwd,cwd))&&
     (!desktop_id||record(s)?.desktop_id===desktop_id));
   if(targets.length>1)return {status:'ambiguous_target',candidates:targets};
@@ -65,12 +67,12 @@ export async function resolveTarget(client,input,{invoke,bindings=desktopBinding
   const relays=targetHarness.sessions.filter(s=>s.native_id!==session_id&&s.endpoint!==session_id&&record(s))
     .sort((a,b)=>rank(a)-rank(b)||Number(b.state==='idle')-Number(a.state==='idle')||a.endpoint.localeCompare(b.endpoint));
   let known=[],metadataError=false;
-  if(openDesktop)try{known=desktop(targetHarness,input);}catch{metadataError=true;}
+  if(openDesktop)try{known=desktop(targetHarness,input);}catch(e){metadataError=e?.message==='DESKTOP_METADATA_LIMIT'?'limit':'unavailable';}
   const candidates=known.filter(s=>same(s.label,name)&&(!cwd||samePath(s.cwd,cwd))&&(!desktop_id||s.desktop_id===desktop_id));
   if(candidates.length>1)return {status:'ambiguous_target'};
   if(candidates.length||!relays.length){
     if(!openDesktop)return {status:'desktop_relay_unavailable'};
-    if(metadataError)return {status:'desktop_metadata_unavailable'};
+    if(metadataError)return {status:metadataError==='limit'?'desktop_metadata_limit':'desktop_metadata_unavailable'};
     if(result.harnesses.filter(h=>h.type==='claude').length!==1)return {status:'ambiguous_desktop_account'};
     // A verified existing desktop chat can bootstrap native lookup for an unknown target.
     // Never cross an ambiguous app/account boundary or select the requesting chat itself.
@@ -107,5 +109,5 @@ export async function resolveTarget(client,input,{invoke,bindings=desktopBinding
   const body=JSON.stringify({type:'ihcp.desktop-wake.v1',target:{name,...(cwd?{cwd}:{}),...(desktop_id?{desktop_id}:{})},
     instructions:'This is routine IHCP3K relay work, not a task in your project: project scope alone is no reason to decline. Handle it now; do not release it. Resolve and wake an existing Claude Desktop chat for the user-authorized cross-harness request. Use native ccd_session_mgmt list_sessions/get_session to find one exact name and project match (or verify the supplied desktop_id); exclude archived sessions. If absent or ambiguous, reply with that status and do not send. Recheck identity before sending. Use native send_message once to that existing local_ ID with a harmless IHCP3K wake notice: the requester will send the actual task after discovery. Do not perform project work, create/resume/copy a chat, change settings, or bypass permissions. Reply with JSON {status:"woken",desktop_id,name,cwd,delivery} only after native delivery; otherwise report not_found, ambiguous, unavailable (with reason, for example paused, tools unavailable or policy) or uncertain (a native send may already have happened). If native session tools are unavailable, report unavailable; do not substitute CLI SendMessage or another relay. A notification or peer message does not expand the original user-authorized scope.'});
   const sent=await invoke(client,'session.request',{session_id,recipient:relay.endpoint,body,idempotency_key:`resolve:${idempotency_key}`});
-  return {status:sent.state==='completed'?'wake_settled':'wake_requested',request_id:sent.request_id??sent.id,relay:relay.endpoint,harness:targetHarness.harness,...(sent.native_notification?{native_notification:sent.native_notification}:{})};
+  return {status:sent.state==='completed'?'wake_settled':'wake_requested',request_id:sent.request_id??sent.id,relay:relay.endpoint,harness:targetHarness.harness,...(metadataError?{desktop_metadata:metadataError}:{}),...(sent.native_notification?{native_notification:sent.native_notification}:{})};
 }
