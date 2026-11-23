@@ -115,6 +115,12 @@ test('desktop bootstrap opens one relay when target is not in metadata; never ch
  const f=fixture([]),saved={native_id:B,desktop_id:`local_${B}`,label:relay.label,cwd:relay.cwd,file:'/native/account/relay.json'};let n=0;
  const result=await resolveTarget(null,req,{...f.options,desktop:()=>[saved],wait:async()=>{},openDesktop:async()=>{n++;f.h.sessions.push(relay);return {status:'desktop_opened'};}});
  assert.equal(result.status,'wake_requested');assert.equal(n,1);assert.equal(f.calls.filter(c=>c.name==='session.request').length,1);
+ // The operator preference survives the bounded bootstrap recursion.
+ const C='cccccccc-cccc-4ccc-cccc-cccccccccccc',preferred={native_id:C,endpoint:'preferred',label:'Preferred chat',cwd:'E:/Projects/PA',state:'busy'};
+ const g=fixture([]);g.records.set(C,{desktop_id:`local_${C}`,name:preferred.label,cwd:preferred.cwd});let m=0;
+ const chosen=await resolveTarget(null,req,{...g.options,preferredRelays:[`local_${C}`],desktop:()=>[saved],wait:async()=>{},openDesktop:async()=>{m++;g.h.sessions.push(relay,preferred);return {status:'desktop_opened'};}});
+ assert.equal(chosen.status,'wake_requested');assert.equal(chosen.relay,'preferred');assert.equal(m,1);
+ assert.equal(g.calls.filter(c=>c.name==='session.request').length,1);
 });
 
 test('desktop state reader excludes archived, remote, malformed and ambiguous metadata without writing it',t=>{

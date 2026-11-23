@@ -97,7 +97,7 @@ export async function resolveTarget(client,input,{invoke,bindings=desktopBinding
         if(!samePath(s.cwd,selected.cwd)||s.label!==selected.label||binding.name!==s.label||!samePath(binding.cwd,s.cwd))return {status:'desktop_identity_changed'};
         if(candidates.length)return {status:'found',harness:targetHarness.harness,target:s};
         // A bootstrap can supply one verified relay, but never a second open.
-        return resolveTarget(client,input,{invoke,bindings,desktop,wait});
+        return resolveTarget(client,input,{invoke,bindings,desktop,preferredRelays,wait});
       }
     }
     return {status:'desktop_open_uncertain'};
