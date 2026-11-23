@@ -74,7 +74,8 @@ export async function resolveTarget(client,input,{invoke,bindings=desktopBinding
     if(result.harnesses.filter(h=>h.type==='claude').length!==1)return {status:'ambiguous_desktop_account'};
     // A verified existing desktop chat can bootstrap native lookup for an unknown target.
     // Never cross an ambiguous app/account boundary or select the requesting chat itself.
-    const pool=candidates.length?candidates:known.filter(s=>s.native_id!==session_id);
+    // Only an explicitly local record may be opened just to act as a relay.
+    const pool=candidates.length?candidates:known.filter(s=>s.native_id!==session_id&&s.scope==='local');
     if(!pool.length)return {status:'desktop_target_unavailable'};
     if(!candidates.length&&new Set(pool.map(s=>s.file.replace(/[\\/][^\\/]+$/,''))).size!==1)return {status:'ambiguous_desktop_account'};
     const selected=candidates[0]??pool.slice().sort((a,b)=>a.desktop_id.localeCompare(b.desktop_id))[0];

@@ -39,16 +39,32 @@ export function retainedDesktopTarget(runtimeFile,harness,input){
    (!input.desktop_id||input.desktop_id===record.desktop_id);
 }
 
-export function readDesktopSession(file,{retained=()=>false}={}){
+// Older Desktop records carry no envScopeId. One counts as local only when nothing in it
+// points elsewhere and either IHCP3K saw this exact chat before (retained) or its account
+// folder also holds explicitly builtin_local records and its project folder exists here.
+// An explicit non-local scope or an environment origin is always rejected.
+function parseDesktopSession(file){
+ const stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>2*1024*1024)return null;
+ const d=JSON.parse(fs.readFileSync(file,'utf8'));
+ if(!local.test(d.sessionId)||!uuid.test(d.cliSessionId)||path.basename(file)!==d.sessionId+'.json'||d.isArchived!==false||d.startedFromEnvironmentId||!text(d.title)||!text(d.cwd)||!path.isAbsolute(d.cwd))return null;
+ // Project only identity fields. Never return prompt/permission snapshots or change app state.
+ const marked=d.envScopeId==='builtin_local';
+ const record={native_id:d.cliSessionId,desktop_id:d.sessionId,label:d.title,cwd:d.cwd,file,scope:marked?'local':'unmarked'};
+ if(marked)return {record,marked:true};
+ const unmarked=d.envScopeId===undefined&&(d.startedFromEnvironmentId===undefined||d.startedFromEnvironmentId===null)&&(d.originCwd===undefined||samePath(d.originCwd,d.cwd));
+ return unmarked?{record,marked:false}:null;
+}
+const isLocalDirectory=dir=>{try{const s=fs.statSync(dir);return s.isDirectory();}catch{return false;}};
+export function accountHasLocalRecords(account){
+ let names;try{names=fs.readdirSync(account);}catch{return false;}
+ if(names.length>10000)return false;
+ return names.some(n=>{if(!n.endsWith('.json')||!local.test(n.replace(/\.json$/,'')))return false;try{return parseDesktopSession(path.join(account,n))?.marked===true;}catch{return false;}});
+}
+export function readDesktopSession(file,{retained=()=>false,localAccount=false}={}){
  try{
-  const stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>2*1024*1024)return null;
-  const d=JSON.parse(fs.readFileSync(file,'utf8'));
-  if(!local.test(d.sessionId)||!uuid.test(d.cliSessionId)||path.basename(file)!==d.sessionId+'.json'||d.isArchived!==false||d.startedFromEnvironmentId||!text(d.title)||!text(d.cwd)||!path.isAbsolute(d.cwd))return null;
-  const record={native_id:d.cliSessionId,desktop_id:d.sessionId,label:d.title,cwd:d.cwd,file};
-  const legacy=d.envScopeId===undefined&&d.startedFromEnvironmentId===null&&samePath(d.originCwd,d.cwd)&&retained(record);
-  if(d.envScopeId!=='builtin_local'&&!legacy)return null;
-  // Project only identity fields. Never return prompt/permission snapshots or change app state.
-  return record;
+  const parsed=parseDesktopSession(file);if(!parsed)return null;
+  if(parsed.marked)return parsed.record;
+  return retained(parsed.record)||(localAccount&&isLocalDirectory(parsed.record.cwd))?parsed.record:null;
  }catch{return null;}
 }
 export function desktopSessions({roots=desktopRoots(),retained}={}){
@@ -60,11 +76,14 @@ export function desktopSessions({roots=desktopRoots(),retained}={}){
    const accounts=directories(org);if(accounts.length>32)throw Error('DESKTOP_METADATA_LIMIT');
    for(const account of accounts.filter(d=>uuid.test(path.basename(d)))){
     const names=fs.readdirSync(account);if((count+=names.length)>10000)throw Error('DESKTOP_METADATA_LIMIT');
+    const parsed=[];
     for(const name of names.filter(n=>local.test(n.replace(/\.json$/,''))&&n.endsWith('.json'))){
      const file=path.join(account,name);let stat;try{stat=fs.lstatSync(file);}catch{throw Error('DESKTOP_METADATA_CHANGED');}
      if((bytes+=stat.size)>256*1024*1024)throw Error('DESKTOP_METADATA_LIMIT');
-     const row=readDesktopSession(file,{retained});if(row)rows.push(row);
+     try{const p=parseDesktopSession(file);if(p)parsed.push(p);}catch{}
     }
+    const localAccount=parsed.some(p=>p.marked);
+    for(const p of parsed)if(p.marked||(retained&&retained(p.record))||(localAccount&&isLocalDirectory(p.record.cwd)))rows.push(p.record);
    }
   }
  }
@@ -77,7 +96,7 @@ export function desktopOpener({runtimeFile,journalDir,tty=!!process.stdin.isTTY&
   if(!tty)return {status:'desktop_open_requires_tty'};
   // The retained lookup runs only for a structurally valid record with missing
   // scope. Both the record and its evidence are rechecked before launch.
-  const readTarget=()=>readDesktopSession(target.file,{retained:record=>retainedDesktopTarget(runtimeFile,harness,input)(record)});
+  const readTarget=()=>readDesktopSession(target.file,{retained:record=>retainedDesktopTarget(runtimeFile,harness,input)(record),localAccount:accountHasLocalRecords(path.dirname(target.file))});
   const fresh=readTarget();
   if(!fresh||JSON.stringify(fresh)!==JSON.stringify(target))return {status:'desktop_identity_changed'};
   const runtime=JSON.parse(fs.readFileSync(runtimeFile,'utf8'));

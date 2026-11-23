@@ -4,7 +4,7 @@ import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {resolveTarget,desktopBindings} from './resolve-target.mjs';
-import {desktopSessions,readDesktopSession,desktopOpener,retainedDesktopTarget} from './desktop-open.mjs';
+import {desktopSessions,readDesktopSession,desktopOpener,retainedDesktopTarget,accountHasLocalRecords} from './desktop-open.mjs';
 import {DatabaseSync} from 'node:sqlite';
 const A='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',B='bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
 const req={session_id:A,harness:'Claude',name:'Game',cwd:'E:/Projects/Game',idempotency_key:'wake-game'};
@@ -112,9 +112,13 @@ test('desktop fallback rejects ambiguous, changed, unsupported and uncertain ide
 });
 
 test('desktop bootstrap opens one relay when target is not in metadata; never chains bootstraps',async()=>{
- const f=fixture([]),saved={native_id:B,desktop_id:`local_${B}`,label:relay.label,cwd:relay.cwd,file:'/native/account/relay.json'};let n=0;
+ const f=fixture([]),saved={native_id:B,desktop_id:`local_${B}`,label:relay.label,cwd:relay.cwd,file:'/native/account/relay.json',scope:'local'};let n=0;
  const result=await resolveTarget(null,req,{...f.options,desktop:()=>[saved],wait:async()=>{},openDesktop:async()=>{n++;f.h.sessions.push(relay);return {status:'desktop_opened'};}});
  assert.equal(result.status,'wake_requested');assert.equal(n,1);assert.equal(f.calls.filter(c=>c.name==='session.request').length,1);
+ // An unmarked older record can be a target, but is never opened just to act as a relay.
+ const u=fixture([]);let opened=0;
+ const none=await resolveTarget(null,req,{...u.options,desktop:()=>[{...saved,scope:'unmarked'}],wait:async()=>{},openDesktop:async()=>{opened++;return {status:'desktop_opened'};}});
+ assert.equal(none.status,'desktop_target_unavailable');assert.equal(opened,0);
  // The operator preference survives the bounded bootstrap recursion.
  const C='cccccccc-cccc-4ccc-cccc-cccccccccccc',preferred={native_id:C,endpoint:'preferred',label:'Preferred chat',cwd:'E:/Projects/PA',state:'busy'};
  const g=fixture([]);g.records.set(C,{desktop_id:`local_${C}`,name:preferred.label,cwd:preferred.cwd});let m=0;
@@ -123,6 +127,23 @@ test('desktop bootstrap opens one relay when target is not in metadata; never ch
  assert.equal(g.calls.filter(c=>c.name==='session.request').length,1);
 });
 
+test('unmarked desktop records count as local only in an account with marked local records and an existing project folder',t=>{
+ const dir=mkdtempSync(join(tmpdir(),'ihcp-desktop-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const account=join(dir,A,B),project=join(dir,'project');mkdirSync(account,{recursive:true});mkdirSync(project);
+ const C='cccccccc-cccc-4ccc-cccc-cccccccccccc',D='dddddddd-dddd-4ddd-dddd-dddddddddddd';
+ const put=(id,cli,fields)=>{const file=join(account,`local_${id}.json`);writeFileSync(file,JSON.stringify({sessionId:`local_${id}`,cliSessionId:cli,title:'Old chat',cwd:project,isArchived:false,...fields}));return file;};
+ const old=put(C,D,{originCwd:project});
+ // Without any explicitly local record in the account, an unmarked record is never trusted.
+ assert.deepEqual(desktopSessions({roots:[dir]}),[]);assert.equal(accountHasLocalRecords(account),false);
+ put(A,B,{title:'Marked',envScopeId:'builtin_local',startedFromEnvironmentId:null});
+ assert.equal(accountHasLocalRecords(account),true);
+ assert.deepEqual(desktopSessions({roots:[dir]}).map(r=>r.desktop_id).sort(),[`local_${A}`,`local_${C}`]);
+ assert.equal(readDesktopSession(old,{localAccount:true}).native_id,D);assert.equal(readDesktopSession(old),null);
+ for(const change of [{envScopeId:'ssh'},{envScopeId:null},{startedFromEnvironmentId:'cloud'},{originCwd:join(dir,'elsewhere')},{cwd:join(dir,'missing')},{isArchived:true}]){
+  writeFileSync(old,JSON.stringify({sessionId:`local_${C}`,cliSessionId:D,title:'Old chat',cwd:project,isArchived:false,originCwd:project,...change}));
+  assert.equal(readDesktopSession(old,{localAccount:true}),null);assert.deepEqual(desktopSessions({roots:[dir]}).map(r=>r.desktop_id),[`local_${A}`]);
+ }
+});
 test('desktop state reader excludes archived, remote, malformed and ambiguous metadata without writing it',t=>{
  const dir=mkdtempSync(join(tmpdir(),'ihcp-desktop-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const account=join(dir,A,B);mkdirSync(account,{recursive:true});const file=join(account,`local_${A}.json`);
@@ -140,9 +161,11 @@ test('desktop state reader excludes archived, remote, malformed and ambiguous me
  const legacy={...d,envScopeId:undefined,originCwd:dir};
  writeFileSync(file,JSON.stringify(legacy));assert.equal(readDesktopSession(file),null);
  assert.equal(readDesktopSession(file,{retained}).native_id,B);
- for(const change of [{envScopeId:'ssh'},{envScopeId:null},{isArchived:true},{startedFromEnvironmentId:'cloud'},{startedFromEnvironmentId:undefined},{originCwd:join(dir,'elsewhere')},{cliSessionId:A}]){
+ for(const change of [{envScopeId:'ssh'},{envScopeId:null},{isArchived:true},{startedFromEnvironmentId:'cloud'},{originCwd:join(dir,'elsewhere')},{cliSessionId:A}]){
   writeFileSync(file,JSON.stringify({...legacy,...change}));assert.equal(readDesktopSession(file,{retained}),null);
  }
+ // Older records may omit startedFromEnvironmentId entirely as well as envScopeId.
+ writeFileSync(file,JSON.stringify({...legacy,startedFromEnvironmentId:undefined}));assert.equal(readDesktopSession(file,{retained}).native_id,B);
  writeFileSync(file,JSON.stringify(legacy));
  assert.equal(readDesktopSession(file,{retained:retainedDesktopTarget(runtimeFile,{harness:'claude'},{...req,cwd:join(dir,'elsewhere')})}),null);
  writeFileSync(file,'{');assert.equal(readDesktopSession(file),null);
