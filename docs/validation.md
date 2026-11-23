@@ -61,6 +61,10 @@ Setup now reuses verified local packages and keeps lifecycle/destructive tests o
 
 This page distinguishes automated tests from checks performed in real agent applications. A **fixture** is controlled test data or a simulated app response; a **rehearsal** exercises a specific real workflow. Neither proves compatibility with every app version. Technical terms are defined in [terminology](terminology.md).
 
+## Version 1.5.4: desktop-wake relays
+
+Pinned-Docker release suite (service, waiter, scripts, legacy adapter and bundled install). The resolver tests cover the relay wording in the request body, an operator `desktop_relay_preference` choosing a verified live relay (case-insensitive desktop IDs, empty, invalid and unverified entries falling back to the default order) and the preference surviving a bounded bootstrap open. Live: a Claude Desktop chat chosen as relay woke an exact suspended TurdMain chat for a Codex request and returned `woken` with the native delivery result. Relay preference has not been exercised against a live configured installation.
+
 ## Version 1.5.3: suspended Claude Desktop resolution
 
 All 166 pinned-Docker release tests passed. Regressions cover a previously discovered exact Desktop session whose saved record omits the scope field, rejection of explicit remote/ambiguous/changed bindings, project-scoped native launch, and bounded identity verification after an uncertain exit or a changed native UUID. They also exercise sender-only withdrawal of an exact never-claimed relay request, preserving uncertain notification fences. The saved SpaceGame identity matched the retained real Windows discovery record in a read-only probe. That probe does not establish native wake or progress-message receipt.

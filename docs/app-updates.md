@@ -1,6 +1,6 @@
 # Native application updates
 
-## App updates and retained inboxes (1.5.3)
+## App updates and retained inboxes (1.5.4)
 
 The operator can update discovery and the public profile without unlinking the harness:
 

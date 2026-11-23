@@ -5,7 +5,7 @@ description: Set up, update, register, unregister or inspect IHCP3K; discover co
 
 # Harness interop
 
-Use IHCP3K **1.5.3**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
+Use IHCP3K **1.5.4**, local MCP tools and the shared private SQLite runtime chosen by the user. A harness is an agent application/account installation. Register the harness once; do not enrol each session. Read [agent setup](../../AGENT_SETUP.md) before installation and [usage](../../docs/usage.md) for invocation examples.
 
 ## Choose the communication route
 
