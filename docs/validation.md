@@ -61,6 +61,10 @@ Setup now reuses verified local packages and keeps lifecycle/destructive tests o
 
 This page distinguishes automated tests from checks performed in real agent applications. A **fixture** is controlled test data or a simulated app response; a **rehearsal** exercises a specific real workflow. Neither proves compatibility with every app version. Technical terms are defined in [terminology](terminology.md).
 
+## Version 1.5.5: older Claude Desktop chats
+
+Pinned-Docker release suite (service, waiter, scripts, legacy adapter and bundled install). Resolver tests cover per-chat local evidence: an unmarked record beside a marked sibling with an existing project folder is never opened; a sighting is recorded only when a live local claude-desktop registration matches the record's CLI UUID, survives CLI UUID rotation, and is rejected for a changed name, project, scope or account folder; an over-limit account inventory records nothing even with a duplicate beyond the bound; disjoint sightings survive; the exact chat opened from suspension is recorded; unmarked records never become bootstrap relays; and the metadata cap is reported distinctly. Read-only on the real Windows Desktop metadata (3,502 local records, 9 explicitly marked): evidence was recorded for all 9 live chats, after which TurdMain, MicroMachines and SpaceGame each verified to one desktop ID. A live direct open of an unmarked chat through this path is not yet observed.
+
 ## Version 1.5.4: desktop-wake relays
 
 Pinned-Docker release suite (service, waiter, scripts, legacy adapter and bundled install). The resolver tests cover the relay wording in the request body, an operator `desktop_relay_preference` choosing a verified live relay (case-insensitive desktop IDs, empty, invalid and unverified entries falling back to the default order) and the preference surviving a bounded bootstrap open. Live: a Claude Desktop chat chosen as relay woke an exact suspended TurdMain chat for a Codex request and returned `woken` with the native delivery result. Relay preference has not been exercised against a live configured installation.
