@@ -34,7 +34,7 @@ export function desktopBindings(directory=join(homedir(),'.claude','sessions')) 
 
 // Uses existing MCP operations. No new runtime, credentials, worker or background service.
 // The caller retains the correlated reply and returns here after the native wake.
-export async function resolveTarget(client,input,{invoke,bindings=desktopBindings,desktop=desktopSessions,openDesktop,wait=ms=>new Promise(r=>setTimeout(r,ms))}={}) {
+export async function resolveTarget(client,input,{invoke,bindings=desktopBindings,desktop=desktopSessions,openDesktop,preferredRelays=[],wait=ms=>new Promise(r=>setTimeout(r,ms))}={}) {
   const {session_id,harness,name,cwd,desktop_id,idempotency_key,wake_request_id}=input;
   if(!text(session_id)||!text(harness,100)||!text(name,200)||!text(idempotency_key,150)||
     (cwd!==undefined&&!text(cwd,4096))||(desktop_id!==undefined&&!desktopId.test(desktop_id))||
@@ -59,8 +59,11 @@ export async function resolveTarget(client,input,{invoke,bindings=desktopBinding
     return {status:request.withdrawn?'wake_withdrawn':'wake_pending',request}; // Never re-send or consume somebody else's reply.
   }
   if(targetHarness.type!=='claude')return {status:'target_unavailable'};
+  // Operator-trusted preference by stable desktop ID, applied only among freshly verified live relays.
+  const preferred=(Array.isArray(preferredRelays)?preferredRelays:[]).filter(id=>typeof id==='string'&&desktopId.test(id)).map(id=>id.toLowerCase());
+  const rank=s=>{const i=preferred.indexOf(record(s)?.desktop_id?.toLowerCase());return i<0?preferred.length:i;};
   const relays=targetHarness.sessions.filter(s=>s.native_id!==session_id&&s.endpoint!==session_id&&record(s))
-    .sort((a,b)=>Number(b.state==='idle')-Number(a.state==='idle')||a.endpoint.localeCompare(b.endpoint));
+    .sort((a,b)=>rank(a)-rank(b)||Number(b.state==='idle')-Number(a.state==='idle')||a.endpoint.localeCompare(b.endpoint));
   let known=[],metadataError=false;
   if(openDesktop)try{known=desktop(targetHarness,input);}catch{metadataError=true;}
   const candidates=known.filter(s=>same(s.label,name)&&(!cwd||samePath(s.cwd,cwd))&&(!desktop_id||s.desktop_id===desktop_id));

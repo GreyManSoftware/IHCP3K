@@ -169,6 +169,7 @@ export async function main(args=process.argv.slice(2)){
      if(mode==='withdraw-wake')return call(c,'session.withdraw_wake',read(input));
      if(mode==='resolve')return resolveTarget(c,read(input),{
        invoke:call,
+       preferredRelays:read(harness.runtime_file).desktop_relay_preference??[],
        desktop:(target,request)=>desktopSessions({retained:retainedDesktopTarget(harness.runtime_file,target,request)}),
        openDesktop:desktopOpener({runtimeFile:harness.runtime_file,journalDir:path.join(dir,'wake-attempts')})
      });

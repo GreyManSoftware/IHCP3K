@@ -34,6 +34,17 @@ test('missing Claude target requests one verified desktop relay without forwardi
   assert.match(body.instructions,/routine IHCP3K relay work, not a task in your project/);
   assert.match(body.instructions,/do not release it/);
 });
+test('an operator relay preference picks a verified live relay first and is ignored when absent or invalid',async()=>{
+  const C='cccccccc-cccc-4ccc-cccc-cccccccccccc',other={native_id:C,endpoint:'another',label:'Preferred chat',cwd:'E:/Projects/PA',state:'busy'};
+  for(const [preferredRelays,expected] of [[[`local_${C}`],'another'],[[`LOCAL_${C.toUpperCase()}`],'another'],[[],'relay'],[['not-an-id',`local_${A}`],'relay']]){
+    const f=fixture([relay,other]);f.records.set(C,{desktop_id:`local_${C}`,name:other.label,cwd:other.cwd});
+    const r=await resolveTarget(null,req,{...f.options,preferredRelays});
+    assert.equal(r.status,'wake_requested');assert.equal(r.relay,expected);
+    assert.equal(f.calls.filter(c=>c.name==='session.request').length,1);
+  }
+  const f=fixture([relay,other]);// A preferred chat without a verified desktop record is never chosen.
+  const r=await resolveTarget(null,req,{...f.options,preferredRelays:[`local_${C}`]});assert.equal(r.relay,'relay');
+});
 test('unavailable, stale, ambiguous and unsupported targets do not trigger guesses or fanout',async()=>{
   for(const [change,status,input] of [
     [f=>f.h.sessions.push(target,{...target,endpoint:'duplicate'}),'ambiguous_target',req],
