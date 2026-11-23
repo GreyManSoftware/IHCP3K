@@ -27,41 +27,58 @@ function samePath(first,second){
 // later CLI UUID rotation can still be verified. Nothing else (field names, a marked sibling,
 // an existing folder) counts as locality evidence.
 const EVIDENCE_LIMIT=2000;
-const evidenceFile=runtimeFile=>path.join(path.dirname(path.resolve(runtimeFile)),'desktop-evidence.json');
-export function readDesktopEvidence(file){
- try{const stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>4*1024*1024)return {};
-  const d=JSON.parse(fs.readFileSync(file,'utf8'));return d?.version===1&&d.entries&&typeof d.entries==='object'?d.entries:{};}catch{return {};}
+// One small file per desktop ID, so overlapping resolves writing different chats never
+// overwrite each other; each write is an atomic tmp+rename of that chat's file alone.
+const evidenceDir=runtimeFile=>path.join(path.dirname(path.resolve(runtimeFile)),'desktop-evidence');
+export function readDesktopEvidence(dir,desktopId){
+ if(!local.test(desktopId??''))return null;
+ try{const file=path.join(dir,desktopId+'.json'),stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>16384)return null;
+  const d=JSON.parse(fs.readFileSync(file,'utf8'));return d?.version===1&&d.desktop_id===desktopId&&text(d.name)&&text(d.cwd)&&text(d.account)?d:null;}catch{return null;}
 }
+// A uniqueness check must see the whole bounded inventory; an over-limit one records nothing.
 function desktopRecordFile(roots,desktopId){
  const found=[];
  for(const root of roots){
   try{const stat=fs.lstatSync(root);if(!stat.isDirectory()||stat.isSymbolicLink())continue;}catch{continue;}
-  for(const org of directories(root).filter(d=>uuid.test(path.basename(d))).slice(0,32))
-   for(const account of directories(org).filter(d=>uuid.test(path.basename(d))).slice(0,32)){
+  const orgs=directories(root);if(orgs.length>32)return null;
+  for(const org of orgs.filter(d=>uuid.test(path.basename(d)))){
+   const accounts=directories(org);if(accounts.length>32)return null;
+   for(const account of accounts.filter(d=>uuid.test(path.basename(d)))){
     const file=path.join(account,desktopId+'.json');try{if(fs.lstatSync(file).isFile())found.push(file);}catch{}
    }
+  }
  }
  return found;
 }
 // observations: [{desktop_id,name,cwd,native_id}] from live, binding-verified sessions only.
-export function recordDesktopEvidence(file,observations,{roots=desktopRoots(),now=Date.now}={}){
- const entries=readDesktopEvidence(file);let changed=false;
+export function recordDesktopEvidence(dir,observations,{roots=desktopRoots(),now=Date.now}={}){
+ let written=0;
  for(const o of observations){
   if(!local.test(o.desktop_id??'')||!uuid.test(o.native_id??'')||!text(o.name)||!text(o.cwd))continue;
-  const files=desktopRecordFile(roots,o.desktop_id);if(files.length!==1)continue;
+  const files=desktopRecordFile(roots,o.desktop_id);if(!files||files.length!==1)continue;
   let parsed;try{parsed=parseDesktopSession(files[0]);}catch{continue;}
   const r=parsed?.record;
   if(!r||r.native_id!==o.native_id||r.label!==o.name||!samePath(r.cwd,o.cwd))continue;
-  entries[o.desktop_id]={name:r.label,cwd:r.cwd,account:path.dirname(files[0]),cli_session_id:r.native_id,seen_at:now()};changed=true;
+  const body=JSON.stringify({version:1,desktop_id:o.desktop_id,name:r.label,cwd:r.cwd,account:path.dirname(files[0]),cli_session_id:r.native_id,seen_at:now()});
+  if(Buffer.byteLength(body)>16384)continue;
+  fs.mkdirSync(dir,{recursive:true,mode:0o700});
+  const file=path.join(dir,o.desktop_id+'.json'),tmp=file+'.'+process.pid+'.'+Math.random().toString(36).slice(2)+'.tmp';
+  fs.writeFileSync(tmp,body,{mode:0o600});fs.renameSync(tmp,file);written++;
  }
- if(!changed)return false;
- const kept=Object.entries(entries).sort((x,y)=>(y[1].seen_at??0)-(x[1].seen_at??0)).slice(0,EVIDENCE_LIMIT);
- const tmp=file+'.'+process.pid+'.tmp';
- fs.writeFileSync(tmp,JSON.stringify({version:1,entries:Object.fromEntries(kept)}),{mode:0o600});fs.renameSync(tmp,file);
- return true;
+ if(written)pruneDesktopEvidence(dir);
+ return written>0;
+}
+// Keep the newest EVIDENCE_LIMIT sightings; stale temporary files from a crash are removed.
+function pruneDesktopEvidence(dir){
+ let names;try{names=fs.readdirSync(dir);}catch{return;}
+ for(const n of names.filter(n=>n.endsWith('.tmp')))try{if(Date.now()-fs.lstatSync(path.join(dir,n)).mtimeMs>60000)fs.unlinkSync(path.join(dir,n));}catch{}
+ const files=names.filter(n=>local.test(n.replace(/\.json$/,''))&&n.endsWith('.json'));
+ if(files.length<=EVIDENCE_LIMIT)return;
+ const dated=files.map(n=>{try{return [n,fs.lstatSync(path.join(dir,n)).mtimeMs];}catch{return [n,0];}}).sort((x,y)=>y[1]-x[1]);
+ for(const [n] of dated.slice(EVIDENCE_LIMIT))try{fs.unlinkSync(path.join(dir,n));}catch{}
 }
 export function desktopEvidenceRecorder(runtimeFile,options){
- return observations=>recordDesktopEvidence(evidenceFile(runtimeFile),observations,options);
+ return observations=>recordDesktopEvidence(evidenceDir(runtimeFile),observations,options);
 }
 
 // Historical evidence only qualifies the exact requested chat. Unknown scope
@@ -77,11 +94,11 @@ export function retainedDesktopTarget(runtimeFile,harness,input){
   rows=db.prepare('SELECT native_id,label,cwd FROM harness_sessions WHERE harness=? AND lower(label)=lower(?)').all(harness.harness,input.name);
  }finally{db.close();}
  const matching=rows.filter(row=>samePath(row.cwd,input.cwd));
- const evidence=readDesktopEvidence(evidenceFile(runtimeFile));
+ const evidence=evidenceDir(runtimeFile);
  const exact=record=>record.label.toLowerCase()===String(input.name).toLowerCase()&&samePath(record.cwd,input.cwd)&&(!input.desktop_id||input.desktop_id===record.desktop_id);
  return record=>exact(record)&&(
    (matching.length===1&&matching[0].native_id===record.native_id&&matching[0].label.toLowerCase()===record.label.toLowerCase()&&samePath(matching[0].cwd,record.cwd))||
-   (()=>{const e=evidence[record.desktop_id];return !!e&&e.name===record.label&&samePath(e.cwd,record.cwd)&&samePath(e.account,path.dirname(record.file));})());
+   (()=>{const e=readDesktopEvidence(evidence,record.desktop_id);return !!e&&e.name===record.label&&samePath(e.cwd,record.cwd)&&samePath(e.account,path.dirname(record.file));})());
 }
 
 // Older Desktop records carry no envScopeId. Such a record qualifies only through

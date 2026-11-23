@@ -98,9 +98,11 @@ export async function resolveTarget(client,input,{invoke,bindings=desktopBinding
       if(live.length===1){
         const s=live[0],binding=currentBindings.get(s.native_id);
         if(!samePath(s.cwd,selected.cwd)||s.label!==selected.label||binding.name!==s.label||!samePath(binding.cwd,s.cwd))return {status:'desktop_identity_changed'};
+        // Capture the stable desktop ID of the exact chat just opened before its CLI UUID can rotate.
+        if(remember)try{remember([{desktop_id:selected.desktop_id,name:s.label,cwd:s.cwd,native_id:s.native_id}]);}catch{}
         if(candidates.length)return {status:'found',harness:targetHarness.harness,target:s};
         // A bootstrap can supply one verified relay, but never a second open.
-        return resolveTarget(client,input,{invoke,bindings,desktop,preferredRelays,wait});
+        return resolveTarget(client,input,{invoke,bindings,desktop,preferredRelays,remember,wait});
       }
     }
     return {status:'desktop_open_uncertain'};
